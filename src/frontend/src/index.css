@@ -1,0 +1,104 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Navy #0B1E3B */
+    --primary: 0.185 0.08 250;
+    --primary-foreground: 1 0 0;
+
+    /* Saffron #F28C28 */
+    --accent: 0.72 0.165 55;
+    --accent-foreground: 1 0 0;
+
+    /* India Green #118A4E */
+    --success: 0.5 0.148 155;
+    --success-foreground: 1 0 0;
+
+    /* Page BG #F2F5F8 */
+    --background: 0.97 0.009 240;
+
+    /* Cards #FFFFFF */
+    --card: 1 0 0;
+    --card-foreground: 0.13 0.04 264;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.13 0.04 264;
+
+    --secondary: 0.95 0.012 250;
+    --secondary-foreground: 0.185 0.08 250;
+
+    --muted: 0.92 0.012 250;
+    --muted-foreground: 0.5 0.03 255;
+
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 1 0 0;
+
+    --border: 0.92 0.01 255;
+    --input: 0.92 0.01 255;
+    --ring: 0.72 0.165 55;
+
+    --foreground: 0.13 0.04 264;
+    --radius: 0.75rem;
+
+    --chart-1: 0.72 0.165 55;
+    --chart-2: 0.5 0.148 155;
+    --chart-3: 0.185 0.08 250;
+    --chart-4: 0.55 0.22 25;
+    --chart-5: 0.65 0.12 200;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Mobile container centering */
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gradient-saffron {
+    background: linear-gradient(
+      135deg,
+      oklch(0.72 0.165 55) 0%,
+      oklch(0.65 0.17 35) 100%
+    );
+  }
+
+  .gradient-green {
+    background: linear-gradient(
+      135deg,
+      oklch(0.5 0.148 155) 0%,
+      oklch(0.42 0.14 165) 100%
+    );
+  }
+
+  .shadow-card {
+    box-shadow: 0 2px 8px oklch(0.13 0.04 264 / 0.08), 0 1px 2px
+      oklch(0.13 0.04 264 / 0.06);
+  }
+
+  .shadow-nav {
+    box-shadow: 0 -2px 20px oklch(0.13 0.04 264 / 0.12);
+  }
+}

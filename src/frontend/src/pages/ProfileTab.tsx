@@ -1,14 +1,18 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award,
-  Chrome,
   Edit2,
+  FileText,
   Loader2,
   Lock,
   LogOut,
-  Phone,
+  MessageSquare,
+  Shield,
+  Trash2,
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -16,8 +20,19 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { UserRole, useCallerRole, useUserStats } from "../hooks/useQueries";
+import { useAppStore } from "../store/appStore";
 
 const MAX_REPORTS = 50;
+
+function timeAgo(timestamp: bigint): string {
+  const diffMs = Date.now() - Number(timestamp) / 1_000_000;
+  const diffHrs = Math.floor(diffMs / 3_600_000);
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffHrs > 24) return `${Math.floor(diffHrs / 24)}d ago`;
+  if (diffHrs > 0) return `${diffHrs}h ago`;
+  if (diffMins > 0) return `${diffMins}m ago`;
+  return "Just now";
+}
 
 export default function ProfileTab() {
   const { data: role, isLoading: roleLoading } = useCallerRole();
@@ -26,8 +41,14 @@ export default function ProfileTab() {
   const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState("Rohan Sharma");
   const [nameInput, setNameInput] = useState("Rohan Sharma");
+  const [guestMode, setGuestMode] = useState(false);
 
-  const isGuest = role === UserRole.guest || (!identity && !roleLoading);
+  const { myReports, myPosts, deleteReport, deletePost } = useAppStore();
+
+  const isGuest =
+    guestMode ||
+    role === UserRole.guest ||
+    (!identity && !roleLoading && !guestMode);
   const reportsCount = Number(stats?.reportsCount ?? 12);
   const progressPct = Math.min((reportsCount / MAX_REPORTS) * 100, 100);
   const certificateUnlocked =
@@ -49,41 +70,78 @@ export default function ProfileTab() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center"
+          className="w-full max-w-xs"
         >
-          <div className="w-24 h-24 rounded-full gradient-saffron flex items-center justify-center mx-auto mb-5 shadow-lg">
-            <span className="text-4xl">🏛️</span>
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-24 h-24 rounded-full gradient-saffron flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <span className="text-4xl">🏛️</span>
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-1">Loksetu</h2>
+            <p className="text-sm text-muted-foreground text-center">
+              Your civic companion — report issues,
+              <br />
+              earn recognition, build a better India.
+            </p>
           </div>
-          <h2 className="text-xl font-bold text-foreground mb-1">Loksetu</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Login to report civic issues and earn the Satark Nagrik Pramanpatra.
-          </p>
 
-          <div className="space-y-3 w-full max-w-xs">
-            <Button
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-              onClick={() => {
-                toast.info("Phone OTP login — coming soon!");
-              }}
-              data-ocid="profile.primary_button"
+          <div className="space-y-3 w-full">
+            {/* Internet Identity — Primary */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
             >
-              <Phone className="w-4 h-4" />
-              Login with Phone OTP
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => login()}
-              disabled={loginStatus === "logging-in"}
-              data-ocid="profile.secondary_button"
+              <Button
+                className="w-full h-13 bg-primary hover:bg-primary/90 text-primary-foreground gap-3 text-sm font-semibold py-4 rounded-xl shadow-md"
+                onClick={() => login()}
+                disabled={loginStatus === "logging-in"}
+                data-ocid="profile.primary_button"
+              >
+                {loginStatus === "logging-in" ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Shield className="w-5 h-5" />
+                )}
+                {loginStatus === "logging-in"
+                  ? "Connecting..."
+                  : "Login with Internet Identity"}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-1.5">
+                🔒 Secure · ICP-native · No password needed
+              </p>
+            </motion.div>
+
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Guest Login — Secondary */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
             >
-              {loginStatus === "logging-in" ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Chrome className="w-4 h-4" />
-              )}
-              Continue with Internet Identity
-            </Button>
+              <Button
+                variant="outline"
+                className="w-full h-13 gap-3 text-sm font-semibold py-4 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-primary/5"
+                onClick={() => {
+                  setGuestMode(true);
+                  toast.success(
+                    "Browsing as Guest — your data won't be saved.",
+                  );
+                }}
+                data-ocid="profile.secondary_button"
+              >
+                <User className="w-5 h-5 text-muted-foreground" />
+                <span className="text-foreground">Continue as Guest</span>
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-1.5">
+                Browse only · Posts & reports won't be saved
+              </p>
+            </motion.div>
           </div>
         </motion.div>
       </div>
@@ -136,10 +194,183 @@ export default function ProfileTab() {
             <p className="text-xs opacity-80 mt-0.5">
               {identity
                 ? `${identity.getPrincipal().toString().slice(0, 20)}...`
-                : "+91 98765 43210"}
+                : "Guest Mode"}
             </p>
           </div>
         </div>
+      </div>
+
+      {/* My Reports + My Posts Tabs */}
+      <div className="mx-4 mb-4">
+        <Tabs defaultValue="reports">
+          <TabsList className="w-full">
+            <TabsTrigger
+              value="reports"
+              className="flex-1 gap-1.5"
+              data-ocid="profile.tab"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              My Reports ({myReports.length})
+            </TabsTrigger>
+            <TabsTrigger
+              value="posts"
+              className="flex-1 gap-1.5"
+              data-ocid="profile.tab"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              My Posts ({myPosts.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="reports" className="mt-3 space-y-2">
+            {myReports.length === 0 ? (
+              <div className="text-center py-8" data-ocid="profile.empty_state">
+                <div className="text-3xl mb-2">📋</div>
+                <p className="text-sm text-muted-foreground">No reports yet.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Report a civic issue from the Nagrik tab.
+                </p>
+              </div>
+            ) : (
+              myReports.map((report, idx) => (
+                <motion.div
+                  key={report.id.toString()}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.04 }}
+                  className="bg-card rounded-xl border border-border p-3"
+                  data-ocid={`profile.item.${idx + 1}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {String(report.category).replace(/[{}]/g, "") ||
+                            "Issue"}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground">
+                          {timeAgo(report.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground leading-snug">
+                        {report.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                        {report.description}
+                        {(report as any).localMediaIsVideo &&
+                          (report as any).localMediaUrl && (
+                            // biome-ignore lint/a11y/useMediaCaption: user-uploaded civic report video
+                            <video
+                              src={(report as any).localMediaUrl}
+                              controls
+                              playsInline
+                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                            />
+                          )}
+                        {!(report as any).localMediaIsVideo &&
+                          (report as any).localMediaUrl && (
+                            <img
+                              src={(report as any).localMediaUrl}
+                              alt="report media"
+                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                            />
+                          )}
+                      </p>
+                      <p className="text-[10px] text-primary mt-1">
+                        📍 {report.gpsLocation}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                      onClick={() => {
+                        deleteReport(report.id);
+                        toast.success("Report removed from profile");
+                      }}
+                      data-ocid={`profile.delete_button.${idx + 1}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="posts" className="mt-3 space-y-2">
+            {myPosts.length === 0 ? (
+              <div className="text-center py-8" data-ocid="profile.empty_state">
+                <div className="text-3xl mb-2">💬</div>
+                <p className="text-sm text-muted-foreground">No posts yet.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Post in the TalkUp community.
+                </p>
+              </div>
+            ) : (
+              myPosts.map((post, idx) => (
+                <motion.div
+                  key={post.id.toString()}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.04 }}
+                  className="bg-card rounded-xl border border-border p-3"
+                  data-ocid={`profile.item.${idx + 1}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-foreground">
+                          {post.displayName}
+                        </span>
+                        <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                          {post.city}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground ml-auto">
+                          {timeAgo(post.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground leading-snug">
+                        {post.content}
+                        {(post as any).localMediaIsVideo &&
+                          (post as any).localMediaUrl && (
+                            // biome-ignore lint/a11y/useMediaCaption: user-uploaded community post video
+                            <video
+                              src={(post as any).localMediaUrl}
+                              controls
+                              playsInline
+                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                            />
+                          )}
+                        {!(post as any).localMediaIsVideo &&
+                          (post as any).localMediaUrl && (
+                            <img
+                              src={(post as any).localMediaUrl}
+                              alt="post media"
+                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                            />
+                          )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                      onClick={() => {
+                        deletePost(post.id);
+                        toast.success("Post removed from profile");
+                      }}
+                      data-ocid={`profile.delete_button.${idx + 1}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Milestone Tracker */}
@@ -185,7 +416,11 @@ export default function ProfileTab() {
           📜 Satark Nagrik Pramanpatra
         </h3>
         <div
-          className={`rounded-xl p-4 border-2 ${certificateUnlocked ? "border-success bg-success/5" : "border-border bg-muted/50"}`}
+          className={`rounded-xl p-4 border-2 ${
+            certificateUnlocked
+              ? "border-success bg-success/5"
+              : "border-border bg-muted/50"
+          }`}
           data-ocid="profile.card"
         >
           {certificateUnlocked ? (
@@ -250,6 +485,7 @@ export default function ProfileTab() {
           className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-destructive/5 transition-colors text-left"
           onClick={() => {
             clear();
+            setGuestMode(false);
             toast.success("Logged out successfully");
           }}
           data-ocid="profile.delete_button"

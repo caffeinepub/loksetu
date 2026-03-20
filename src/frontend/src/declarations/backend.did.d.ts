@@ -10,6 +10,16 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface CommunityPost {
+  'id' : bigint,
+  'likeCount' : bigint,
+  'content' : string,
+  'displayName' : string,
+  'city' : string,
+  'author' : Principal,
+  'mediaBlob' : [] | [ExternalBlob],
+  'timestamp' : bigint,
+}
 export type ExternalBlob = Uint8Array;
 export interface Issue {
   'id' : bigint,
@@ -39,6 +49,27 @@ export interface MarketRates {
   'potato' : string,
 }
 export interface News { 'headline' : string, 'timestamp' : bigint }
+export interface PrivateMessage {
+  'id' : bigint,
+  'content' : string,
+  'sender' : Principal,
+  'mediaBlob' : [] | [ExternalBlob],
+  'timestamp' : bigint,
+  'receiver' : Principal,
+}
+export interface Status {
+  'photoBlob' : [] | [ExternalBlob],
+  'content' : string,
+  'displayName' : string,
+  'city' : string,
+  'author' : Principal,
+  'timestamp' : bigint,
+}
+export interface UserProfile {
+  'alias' : string,
+  'displayName' : string,
+  'anonymousMode' : boolean,
+}
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -76,20 +107,36 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addNews' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'createCommunityPost' : ActorMethod<[string, string, [] | [string]], bigint>,
   'createIssue' : ActorMethod<
     [string, string, IssueCategory, string, [] | [string], boolean],
     bigint
   >,
+  'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getCommunityPostsByCity' : ActorMethod<[string], Array<CommunityPost>>,
+  'getConversationHistory' : ActorMethod<[Principal], Array<PrivateMessage>>,
+  'getDisplayName' : ActorMethod<[Principal], string>,
   'getMarketRates' : ActorMethod<[], MarketRates>,
   'getNews' : ActorMethod<[], Array<News>>,
   'getPublicIssues' : ActorMethod<[], Array<Issue>>,
+  'getStatusesByCity' : ActorMethod<[string], Array<Status>>,
+  'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUserStats' : ActorMethod<[], UserStats>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'likeCommunityPost' : ActorMethod<[bigint], undefined>,
+  'listConversations' : ActorMethod<[], Array<Principal>>,
+  'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'sendPrivateMessage' : ActorMethod<
+    [Principal, string, [] | [string]],
+    bigint
+  >,
+  'setDisplayName' : ActorMethod<[string, boolean], undefined>,
   'setMarketRates' : ActorMethod<
     [string, string, string, string, string, string, string],
     undefined
   >,
+  'setStatus' : ActorMethod<[string, string, [] | [string]], undefined>,
   'upvoteIssue' : ActorMethod<[bigint], undefined>,
   'verifyImage' : ActorMethod<[string], boolean>,
 }

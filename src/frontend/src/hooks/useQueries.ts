@@ -1,9 +1,26 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { IssueCategory, UserRole } from "../backend";
-import type { Issue, MarketRates, News, UserStats } from "../backend.d";
+import type {
+  CommunityPost,
+  Issue,
+  MarketRates,
+  News,
+  PrivateMessage,
+  Status,
+  UserStats,
+} from "../backend.d";
 import { useActor } from "./useActor";
 
-export type { Issue, MarketRates, News, UserStats };
+export type {
+  Issue,
+  MarketRates,
+  News,
+  UserStats,
+  CommunityPost,
+  PrivateMessage,
+  Status,
+};
 export { IssueCategory, UserRole };
 
 export function usePublicIssues() {
@@ -127,6 +144,133 @@ export function useUpvoteIssue() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["publicIssues"] });
+    },
+  });
+}
+
+// ——————————————————————————
+// Community / WhatsUpp queries
+// ——————————————————————————
+
+export function useCommunityPosts(city: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<CommunityPost[]>({
+    queryKey: ["communityPosts", city],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getCommunityPostsByCity(city);
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useLikeCommunityPost() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.likeCommunityPost(postId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["communityPosts"] });
+    },
+  });
+}
+
+export function useCreateCommunityPost() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      city: string;
+      content: string;
+      mediaBlobId: string | null;
+      displayName?: string;
+      anonymous?: boolean;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.createCommunityPost(
+        params.city,
+        params.content,
+        params.mediaBlobId,
+      );
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["communityPosts", vars.city],
+      });
+    },
+  });
+}
+
+export function useConversations() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Principal[]>({
+    queryKey: ["conversations"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listConversations();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useConversationHistory(withUser: Principal | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<PrivateMessage[]>({
+    queryKey: ["conversationHistory", withUser?.toText()],
+    queryFn: async () => {
+      if (!actor || !withUser) return [];
+      return actor.getConversationHistory(withUser);
+    },
+    enabled: !!actor && !isFetching && !!withUser,
+  });
+}
+
+export function useSendPrivateMessage() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { receiver: Principal; content: string }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.sendPrivateMessage(params.receiver, params.content, null);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversationHistory", vars.receiver.toText()],
+      });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+}
+
+export function useStatuses(city: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Status[]>({
+    queryKey: ["statuses", city],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getStatusesByCity(city);
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSetStatus() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      city: string;
+      content: string;
+      photoBlobId: string | null;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.setStatus(params.city, params.content, params.photoBlobId);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["statuses", vars.city] });
     },
   });
 }

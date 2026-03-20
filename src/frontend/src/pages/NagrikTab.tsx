@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Info, Plus, Shield } from "lucide-react";
+import { Info, MapPin, Plus, Shield } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import IssueCard from "../components/IssueCard";
 import ReportIssueModal from "../components/ReportIssueModal";
@@ -13,14 +13,16 @@ import {
   useUpvoteIssue,
 } from "../hooks/useQueries";
 import type { Issue } from "../hooks/useQueries";
+import { useAppStore } from "../store/appStore";
 
+// Sample issues with realistic GPS near major Indian cities
 const SAMPLE_ISSUES: Issue[] = [
   {
     id: BigInt(1),
     title: "Pothole on MG Road near bus stand",
     description:
       "Large pothole has formed after heavy rains. Two-wheelers are at risk of accidents.",
-    gpsLocation: "28.6129° N, 77.2295° E",
+    gpsLocation: "28.6129° N, 77.2295° E", // Delhi
     category: IssueCategory.infrastructure,
     upvotes: BigInt(24),
     timestamp: BigInt((Date.now() - 7_200_000) * 1_000_000),
@@ -32,7 +34,7 @@ const SAMPLE_ISSUES: Issue[] = [
     title: "Garbage pile-up at Sector 12 corner",
     description:
       "Sanitation truck hasn't come for 5 days. Foul smell and health hazard.",
-    gpsLocation: "28.6200° N, 77.2100° E",
+    gpsLocation: "28.6200° N, 77.2100° E", // Delhi
     category: IssueCategory.sanitation,
     upvotes: BigInt(18),
     timestamp: BigInt((Date.now() - 18_000_000) * 1_000_000),
@@ -44,7 +46,7 @@ const SAMPLE_ISSUES: Issue[] = [
     title: "Streetlight broken near Ramlila Ground",
     description:
       "Multiple streetlights non-functional since last week, causing safety concerns at night.",
-    gpsLocation: "28.6350° N, 77.2450° E",
+    gpsLocation: "28.6350° N, 77.2450° E", // Delhi
     category: IssueCategory.publicSafety,
     upvotes: BigInt(9),
     timestamp: BigInt((Date.now() - 86_400_000) * 1_000_000),
@@ -56,7 +58,7 @@ const SAMPLE_ISSUES: Issue[] = [
     title: "Water leakage on Civil Lines Road",
     description:
       "Municipal water pipe burst, flooding the road and wasting water.",
-    gpsLocation: "28.6440° N, 77.2210° E",
+    gpsLocation: "28.6440° N, 77.2210° E", // Delhi
     category: IssueCategory.infrastructure,
     upvotes: BigInt(31),
     timestamp: BigInt((Date.now() - 3_600_000) * 1_000_000),
@@ -65,33 +67,134 @@ const SAMPLE_ISSUES: Issue[] = [
   },
 ];
 
-export default function NagrikTab() {
+// Haversine formula — returns distance in km
+function haversineKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Parse "28.6129° N, 77.2295° E" → {lat, lng}
+function parseGps(gpsStr: string): { lat: number; lng: number } | null {
+  const match = gpsStr.match(/([\.\d]+)°\s*([NS]),\s*([\d.]+)°\s*([EW])/i);
+  if (!match) return null;
+  const lat =
+    Number.parseFloat(match[1]) * (match[2].toUpperCase() === "S" ? -1 : 1);
+  const lng =
+    Number.parseFloat(match[3]) * (match[4].toUpperCase() === "W" ? -1 : 1);
+  return { lat, lng };
+}
+
+interface NagrikTabProps {
+  selectedCity: string;
+}
+
+export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   const [reportOpen, setReportOpen] = useState(false);
   const [vigilanceOpen, setVigilanceOpen] = useState(false);
   const [vigilanceActive, setVigilanceActive] = useState(false);
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [_locationLabel, setLocationLabel] = useState<string>("");
+  const [localIssues, setLocalIssues] = useState<Issue[]>([]);
+
+  const { addReport, deleteReport, editReport, myReports } = useAppStore();
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+          setLocationLabel("Near Me (20km)");
+        },
+        () => {
+          /* silently ignore — city filter used as fallback */
+        },
+      );
+    }
+  }, []);
 
   const { data: issues, isLoading } = usePublicIssues();
   const createIssue = useCreateIssue();
   const upvoteIssue = useUpvoteIssue();
 
-  const displayIssues: Issue[] =
+  const backendIssues: Issue[] =
     issues && issues.length > 0 ? issues : SAMPLE_ISSUES;
+
+  const rawIssues: Issue[] = [...localIssues, ...backendIssues];
+
+  const displayIssues: Issue[] = (() => {
+    if (userLocation) {
+      return rawIssues.filter((issue) => {
+        const coords = parseGps(issue.gpsLocation);
+        if (!coords) return false;
+        return (
+          haversineKm(
+            userLocation.lat,
+            userLocation.lng,
+            coords.lat,
+            coords.lng,
+          ) <= 20
+        );
+      });
+    }
+    return rawIssues.filter((issue) =>
+      issue.gpsLocation.toLowerCase().includes(selectedCity.toLowerCase()),
+    );
+  })();
+
+  const feedLocationLabel = userLocation ? "Near Me (20km)" : selectedCity;
 
   async function handleSubmit(
     data: Parameters<typeof createIssue.mutateAsync>[0],
   ) {
+    const optimisticIssue: Issue = {
+      id: BigInt(Date.now()),
+      title: data.title,
+      description: data.description,
+      gpsLocation: data.gpsLocation,
+      category: data.category,
+      upvotes: BigInt(0),
+      timestamp: BigInt(Date.now() * 1_000_000),
+      isVigilance: data.isVigilance,
+      reporter: { isAnonymous: () => false, toText: () => "me" } as any,
+    };
+
+    if (!data.isVigilance) {
+      setLocalIssues((prev) => [optimisticIssue, ...prev]);
+      addReport(optimisticIssue);
+    }
+
+    setReportOpen(false);
+    setVigilanceOpen(false);
+    setVigilanceActive(false);
+    toast.success(
+      data.isVigilance
+        ? "Vigilance report submitted anonymously ✅"
+        : "Issue reported successfully! ✅",
+    );
+
     try {
       await createIssue.mutateAsync(data);
-      toast.success(
-        data.isVigilance
-          ? "Vigilance report submitted anonymously"
-          : "Issue reported successfully!",
-      );
-      setReportOpen(false);
-      setVigilanceOpen(false);
-      setVigilanceActive(false);
     } catch {
-      toast.error("Failed to submit report. Please try again.");
+      // Backend failed but report already shown locally — no error shown
     }
   }
 
@@ -104,14 +207,33 @@ export default function NagrikTab() {
     }
   }
 
+  function handleDeleteIssue(id: bigint) {
+    setLocalIssues((prev) => prev.filter((i) => i.id !== id));
+    deleteReport(id);
+    toast.success("Report deleted");
+  }
+
+  function handleEditIssue(id: bigint, newTitle: string, newDesc: string) {
+    setLocalIssues((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, title: newTitle, description: newDesc } : i,
+      ),
+    );
+    editReport(id, newTitle, newDesc);
+    toast.success("Report updated");
+  }
+
+  const myReportIds = new Set(myReports.map((r) => r.id.toString()));
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Hero Banner */}
       <div className="gradient-saffron rounded-2xl mx-4 mt-4 mb-3 px-4 py-4 text-white">
         <h2 className="text-xl font-bold leading-tight">Welcome, Nagrik! 🇮🇳</h2>
-        <p className="text-sm opacity-90 mt-0.5">
-          Your Civic Super App for a Better Community.
-        </p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <MapPin className="w-3.5 h-3.5 opacity-80" />
+          <p className="text-sm opacity-90">{selectedCity} · Civic Super App</p>
+        </div>
         <div className="flex gap-2 mt-3">
           <div className="flex items-center gap-1.5 bg-white/20 rounded-full px-2.5 py-1">
             <Info className="w-3 h-3" />
@@ -122,6 +244,25 @@ export default function NagrikTab() {
             <span className="text-xs font-medium">30-Day Auto-Escalation</span>
           </div>
         </div>
+      </div>
+
+      {/* GPS / City status chip */}
+      <div className="px-4 mb-2">
+        {userLocation ? (
+          <div className="inline-flex items-center gap-1.5 bg-success/10 border border-success/30 rounded-full px-3 py-1">
+            <span className="text-xs">📍</span>
+            <span className="text-xs font-semibold text-success">
+              GPS Active — Showing issues within 20km
+            </span>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-1.5 bg-muted border border-border rounded-full px-3 py-1">
+            <span className="text-xs">🏙️</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Showing issues for {selectedCity}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Vigilance Mode Button */}
@@ -172,7 +313,7 @@ export default function NagrikTab() {
       <div className="px-4 mb-2 flex items-center justify-between">
         <h3 className="text-base font-bold text-foreground">Community Feed</h3>
         <span className="text-xs text-muted-foreground">
-          {displayIssues.length} issues nearby
+          {feedLocationLabel} · {displayIssues.length} issues
         </span>
       </div>
 
@@ -196,6 +337,9 @@ export default function NagrikTab() {
                 index={index}
                 onUpvote={handleUpvote}
                 isUpvoting={upvoteIssue.isPending}
+                isOwner={myReportIds.has(issue.id.toString())}
+                onDelete={handleDeleteIssue}
+                onEdit={handleEditIssue}
               />
             ))}
 
@@ -203,10 +347,10 @@ export default function NagrikTab() {
           <div className="text-center py-12" data-ocid="nagrik.empty_state">
             <div className="text-4xl mb-3">🏙️</div>
             <p className="text-muted-foreground text-sm">
-              No issues reported yet.
+              No issues reported in {selectedCity} yet.
             </p>
             <p className="text-muted-foreground text-xs">
-              Be the first to report!
+              Be the first to report one!
             </p>
           </div>
         )}

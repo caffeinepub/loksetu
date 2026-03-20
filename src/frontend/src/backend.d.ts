@@ -14,9 +14,14 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
-export interface News {
-    headline: string;
-    timestamp: bigint;
+export interface UserStats {
+    unlockedCertificate: boolean;
+    reportsCount: bigint;
+}
+export interface UserProfile {
+    alias: string;
+    displayName: string;
+    anonymousMode: boolean;
 }
 export interface MarketRates {
     cng: string;
@@ -39,9 +44,35 @@ export interface Issue {
     isVigilance: boolean;
     reporter: Principal;
 }
-export interface UserStats {
-    unlockedCertificate: boolean;
-    reportsCount: bigint;
+export interface CommunityPost {
+    id: bigint;
+    likeCount: bigint;
+    content: string;
+    displayName: string;
+    city: string;
+    author: Principal;
+    mediaBlob?: ExternalBlob;
+    timestamp: bigint;
+}
+export interface PrivateMessage {
+    id: bigint;
+    content: string;
+    sender: Principal;
+    mediaBlob?: ExternalBlob;
+    timestamp: bigint;
+    receiver: Principal;
+}
+export interface News {
+    headline: string;
+    timestamp: bigint;
+}
+export interface Status {
+    photoBlob?: ExternalBlob;
+    content: string;
+    displayName: string;
+    city: string;
+    author: Principal;
+    timestamp: bigint;
 }
 export enum IssueCategory {
     healthcare = "healthcare",
@@ -59,14 +90,27 @@ export enum UserRole {
 export interface backendInterface {
     addNews(headline: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    createCommunityPost(city: string, content: string, mediaBlobId: string | null): Promise<bigint>;
     createIssue(title: string, description: string, category: IssueCategory, gpsLocation: string, photoBlobId: string | null, isVigilance: boolean): Promise<bigint>;
+    getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getCommunityPostsByCity(city: string): Promise<Array<CommunityPost>>;
+    getConversationHistory(withUser: Principal): Promise<Array<PrivateMessage>>;
+    getDisplayName(user: Principal): Promise<string>;
     getMarketRates(): Promise<MarketRates>;
     getNews(): Promise<Array<News>>;
     getPublicIssues(): Promise<Array<Issue>>;
+    getStatusesByCity(city: string): Promise<Array<Status>>;
+    getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUserStats(): Promise<UserStats>;
     isCallerAdmin(): Promise<boolean>;
+    likeCommunityPost(postId: bigint): Promise<void>;
+    listConversations(): Promise<Array<Principal>>;
+    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    sendPrivateMessage(receiver: Principal, content: string, mediaBlobId: string | null): Promise<bigint>;
+    setDisplayName(displayName: string, anonymousMode: boolean): Promise<void>;
     setMarketRates(petrol: string, diesel: string, cng: string, lpg: string, onion: string, tomato: string, potato: string): Promise<void>;
+    setStatus(city: string, content: string, photoBlobId: string | null): Promise<void>;
     upvoteIssue(issueId: bigint): Promise<void>;
     verifyImage(_blobId: string): Promise<boolean>;
 }

@@ -32,6 +32,30 @@ export const IssueCategory = IDL.Variant({
   'sanitation' : IDL.Null,
   'infrastructure' : IDL.Null,
 });
+export const UserProfile = IDL.Record({
+  'alias' : IDL.Text,
+  'displayName' : IDL.Text,
+  'anonymousMode' : IDL.Bool,
+});
+export const ExternalBlob = IDL.Vec(IDL.Nat8);
+export const CommunityPost = IDL.Record({
+  'id' : IDL.Nat,
+  'likeCount' : IDL.Nat,
+  'content' : IDL.Text,
+  'displayName' : IDL.Text,
+  'city' : IDL.Text,
+  'author' : IDL.Principal,
+  'mediaBlob' : IDL.Opt(ExternalBlob),
+  'timestamp' : IDL.Int,
+});
+export const PrivateMessage = IDL.Record({
+  'id' : IDL.Nat,
+  'content' : IDL.Text,
+  'sender' : IDL.Principal,
+  'mediaBlob' : IDL.Opt(ExternalBlob),
+  'timestamp' : IDL.Int,
+  'receiver' : IDL.Principal,
+});
 export const MarketRates = IDL.Record({
   'cng' : IDL.Text,
   'lpg' : IDL.Text,
@@ -45,7 +69,6 @@ export const News = IDL.Record({
   'headline' : IDL.Text,
   'timestamp' : IDL.Int,
 });
-export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const Issue = IDL.Record({
   'id' : IDL.Nat,
   'upvotes' : IDL.Nat,
@@ -57,6 +80,14 @@ export const Issue = IDL.Record({
   'category' : IssueCategory,
   'isVigilance' : IDL.Bool,
   'reporter' : IDL.Principal,
+});
+export const Status = IDL.Record({
+  'photoBlob' : IDL.Opt(ExternalBlob),
+  'content' : IDL.Text,
+  'displayName' : IDL.Text,
+  'city' : IDL.Text,
+  'author' : IDL.Principal,
+  'timestamp' : IDL.Int,
 });
 export const UserStats = IDL.Record({
   'unlockedCertificate' : IDL.Bool,
@@ -93,6 +124,11 @@ export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addNews' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'createCommunityPost' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+      [IDL.Nat],
+      [],
+    ),
   'createIssue' : IDL.Func(
       [
         IDL.Text,
@@ -105,17 +141,45 @@ export const idlService = IDL.Service({
       [IDL.Nat],
       [],
     ),
+  'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getCommunityPostsByCity' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(CommunityPost)],
+      ['query'],
+    ),
+  'getConversationHistory' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Vec(PrivateMessage)],
+      ['query'],
+    ),
+  'getDisplayName' : IDL.Func([IDL.Principal], [IDL.Text], ['query']),
   'getMarketRates' : IDL.Func([], [MarketRates], ['query']),
   'getNews' : IDL.Func([], [IDL.Vec(News)], ['query']),
   'getPublicIssues' : IDL.Func([], [IDL.Vec(Issue)], ['query']),
+  'getStatusesByCity' : IDL.Func([IDL.Text], [IDL.Vec(Status)], ['query']),
+  'getUserProfile' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(UserProfile)],
+      ['query'],
+    ),
   'getUserStats' : IDL.Func([], [UserStats], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'likeCommunityPost' : IDL.Func([IDL.Nat], [], []),
+  'listConversations' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+  'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'sendPrivateMessage' : IDL.Func(
+      [IDL.Principal, IDL.Text, IDL.Opt(IDL.Text)],
+      [IDL.Nat],
+      [],
+    ),
+  'setDisplayName' : IDL.Func([IDL.Text, IDL.Bool], [], []),
   'setMarketRates' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [],
       [],
     ),
+  'setStatus' : IDL.Func([IDL.Text, IDL.Text, IDL.Opt(IDL.Text)], [], []),
   'upvoteIssue' : IDL.Func([IDL.Nat], [], []),
   'verifyImage' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
 });
@@ -147,6 +211,30 @@ export const idlFactory = ({ IDL }) => {
     'sanitation' : IDL.Null,
     'infrastructure' : IDL.Null,
   });
+  const UserProfile = IDL.Record({
+    'alias' : IDL.Text,
+    'displayName' : IDL.Text,
+    'anonymousMode' : IDL.Bool,
+  });
+  const ExternalBlob = IDL.Vec(IDL.Nat8);
+  const CommunityPost = IDL.Record({
+    'id' : IDL.Nat,
+    'likeCount' : IDL.Nat,
+    'content' : IDL.Text,
+    'displayName' : IDL.Text,
+    'city' : IDL.Text,
+    'author' : IDL.Principal,
+    'mediaBlob' : IDL.Opt(ExternalBlob),
+    'timestamp' : IDL.Int,
+  });
+  const PrivateMessage = IDL.Record({
+    'id' : IDL.Nat,
+    'content' : IDL.Text,
+    'sender' : IDL.Principal,
+    'mediaBlob' : IDL.Opt(ExternalBlob),
+    'timestamp' : IDL.Int,
+    'receiver' : IDL.Principal,
+  });
   const MarketRates = IDL.Record({
     'cng' : IDL.Text,
     'lpg' : IDL.Text,
@@ -157,7 +245,6 @@ export const idlFactory = ({ IDL }) => {
     'potato' : IDL.Text,
   });
   const News = IDL.Record({ 'headline' : IDL.Text, 'timestamp' : IDL.Int });
-  const ExternalBlob = IDL.Vec(IDL.Nat8);
   const Issue = IDL.Record({
     'id' : IDL.Nat,
     'upvotes' : IDL.Nat,
@@ -169,6 +256,14 @@ export const idlFactory = ({ IDL }) => {
     'category' : IssueCategory,
     'isVigilance' : IDL.Bool,
     'reporter' : IDL.Principal,
+  });
+  const Status = IDL.Record({
+    'photoBlob' : IDL.Opt(ExternalBlob),
+    'content' : IDL.Text,
+    'displayName' : IDL.Text,
+    'city' : IDL.Text,
+    'author' : IDL.Principal,
+    'timestamp' : IDL.Int,
   });
   const UserStats = IDL.Record({
     'unlockedCertificate' : IDL.Bool,
@@ -205,6 +300,11 @@ export const idlFactory = ({ IDL }) => {
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addNews' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'createCommunityPost' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Nat],
+        [],
+      ),
     'createIssue' : IDL.Func(
         [
           IDL.Text,
@@ -217,17 +317,45 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Nat],
         [],
       ),
+    'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getCommunityPostsByCity' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(CommunityPost)],
+        ['query'],
+      ),
+    'getConversationHistory' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(PrivateMessage)],
+        ['query'],
+      ),
+    'getDisplayName' : IDL.Func([IDL.Principal], [IDL.Text], ['query']),
     'getMarketRates' : IDL.Func([], [MarketRates], ['query']),
     'getNews' : IDL.Func([], [IDL.Vec(News)], ['query']),
     'getPublicIssues' : IDL.Func([], [IDL.Vec(Issue)], ['query']),
+    'getStatusesByCity' : IDL.Func([IDL.Text], [IDL.Vec(Status)], ['query']),
+    'getUserProfile' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(UserProfile)],
+        ['query'],
+      ),
     'getUserStats' : IDL.Func([], [UserStats], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'likeCommunityPost' : IDL.Func([IDL.Nat], [], []),
+    'listConversations' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+    'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'sendPrivateMessage' : IDL.Func(
+        [IDL.Principal, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Nat],
+        [],
+      ),
+    'setDisplayName' : IDL.Func([IDL.Text, IDL.Bool], [], []),
     'setMarketRates' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [],
         [],
       ),
+    'setStatus' : IDL.Func([IDL.Text, IDL.Text, IDL.Opt(IDL.Text)], [], []),
     'upvoteIssue' : IDL.Func([IDL.Nat], [], []),
     'verifyImage' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   });

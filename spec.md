@@ -1,30 +1,31 @@
-# Loksetu - Civic Super App
+# Loksetu / TalkUp
 
 ## Current State
-New project. No existing code.
+- Profile page has My Reports and My Posts tabs but My Reports shows empty (pure useState, no persistence)
+- My Posts shows text only, no media (photo/video) even if the post had media
+- Status viewer falls back to initials placeholder because the object URL is revoked immediately after posting in handlePost, and localStatuses is typed as `never[]` breaking TypeScript casts
 
 ## Requested Changes (Diff)
 
 ### Add
-- Full civic utility super app with 3-tab bottom navigation
-- Tab 1 (Nagrik): Community civic issue feed with upvoting, new issue reporting with camera + GPS + category dropdown, Vigilance Mode for anonymous high-stakes reporting
-- Tab 2 (News Updates): News ticker carousel, Market Dashboard (fuel/commodity rates), City Hub tiles (transit, emergency, jobs, volunteering)
-- Tab 3 (Profile): Guest login wall (Phone OTP), Milestone Tracker progress bar (X/50 verified reports), Satark Nagrik Pramanpatra certificate (unlocks at 50)
-- Authorization system for authenticated vs guest users
-- Camera integration for live issue capture
-- Blob storage for issue photos
+- localStorage persistence for myReports and myPosts so they survive page refresh
+- Media rendering (img/video) in My Reports cards (photoBlob)
+- Media rendering (img/video) in My Posts cards (localMediaUrl / localMediaIsVideo)
+- Pass localMediaUrl and localMediaIsVideo through addPost so ProfileTab can show them
+- Fix localStatuses type in TalkUpTab (Status section) from never[] to a proper interface
+- Defer URL.revokeObjectURL so the blob URL stays valid while the status is visible
 
 ### Modify
-- N/A (new project)
+- appStore.tsx: initialize myReports/myPosts from localStorage, persist on every update
+- appStore.tsx: extend the local post shape to carry localMediaUrl and localMediaIsVideo
+- ProfileTab.tsx: render img/video in both My Reports and My Posts cards
+- TalkUpTab.tsx: fix localStatuses typing and remove premature URL revocation
 
 ### Remove
-- N/A (new project)
+- Nothing removed
 
 ## Implementation Plan
-1. Backend: Issue management (create, list, upvote), user profile with report count, vigilance reports (anonymous), auto-escalation metadata, market rates data, news data
-2. Frontend: Bottom nav shell, NagrikTab (feed, FAB, report form, vigilance mode), NewsTab (ticker, market grid, city hub), ProfileTab (guest/auth state, progress bar, certificate)
-3. Authorization: Guest vs authenticated user state
-4. Camera: Live capture only for issue reporting
-5. Blob storage: Store issue photos
-6. AI image verification: Placeholder function in backend
-7. 30-day auto-escalation: Timestamp on each issue, backend logic to flag single-vote issues older than 30 days
+1. appStore.tsx: load initial state from localStorage; save on addReport/deleteReport/editReport/addPost/deletePost/editPost; add localMediaUrl+localMediaIsVideo fields to stored post shape
+2. TalkUpTab.tsx StatusSubTab: replace `never[]` with a typed LocalStatus interface; move URL.revokeObjectURL to a cleanup effect or remove it entirely so the blob URL stays alive
+3. ProfileTab.tsx: add <img>/<video> rendering block inside My Reports and My Posts cards
+4. TalkUpTab.tsx community post composer: pass localMediaUrl and localMediaIsVideo when calling addPost

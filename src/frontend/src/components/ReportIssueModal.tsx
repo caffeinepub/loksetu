@@ -26,6 +26,7 @@ import {
   MapPin,
   RotateCcw,
   Shield,
+  User,
   Video,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -44,6 +45,9 @@ interface ReportIssueModalProps {
     gpsLocation: string;
     photoBlobId: string | null;
     isVigilance: boolean;
+    mediaUrl?: string;
+    mediaIsVideo?: boolean;
+    identityMode: "anonymous" | "real";
   }) => Promise<void>;
   isVigilance?: boolean;
   isSubmitting?: boolean;
@@ -94,6 +98,9 @@ export default function ReportIssueModal({
   const [capturedIsVideo, setCapturedIsVideo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [mediaMode, setMediaMode] = useState<MediaMode>("camera");
+  const [identityMode, setIdentityMode] = useState<"anonymous" | "real">(
+    "anonymous",
+  );
 
   const galleryPhotoRef = useRef<HTMLInputElement>(null);
   const galleryVideoRef = useRef<HTMLInputElement>(null);
@@ -125,6 +132,7 @@ export default function ReportIssueModal({
       setDescription("");
       setCategory(IssueCategory.infrastructure);
       setMediaMode("camera");
+      setIdentityMode("anonymous");
     }
     return () => {
       stopCamera();
@@ -195,6 +203,9 @@ export default function ReportIssueModal({
         gpsLocation: gps,
         photoBlobId,
         isVigilance,
+        mediaUrl: capturedUrl ?? undefined,
+        mediaIsVideo: capturedIsVideo,
+        identityMode,
       });
     } catch {
       // onSubmit handles its own errors — swallow here
@@ -283,7 +294,8 @@ export default function ReportIssueModal({
             <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5 mb-4">
               <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
               <span className="text-xs text-destructive font-medium">
-                ⚠️ Extreme Anonymity is Active — bypasses public feed
+                ⚠️ Vigilance Mode — High-stakes reporting. Choose your identity
+                below.
               </span>
             </div>
           )}
@@ -301,6 +313,53 @@ export default function ReportIssueModal({
                 30-Day Auto-Escalation
               </span>
             </div>
+          </div>
+
+          {/* Identity toggle — always visible, prominent in Vigilance mode */}
+          <div className="mb-4">
+            <Label className="text-xs font-semibold mb-2 block">
+              {isVigilance ? "🛡️ Post Identity" : "Post as"}
+            </Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                  identityMode === "anonymous"
+                    ? "bg-destructive/10 border-destructive text-destructive"
+                    : "bg-card border-border text-muted-foreground hover:border-muted-foreground"
+                }`}
+                onClick={() => setIdentityMode("anonymous")}
+                data-ocid="nagrik.toggle"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                Post Anonymously
+              </button>
+              <button
+                type="button"
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                  identityMode === "real"
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-card border-border text-muted-foreground hover:border-muted-foreground"
+                }`}
+                onClick={() => setIdentityMode("real")}
+                data-ocid="nagrik.toggle"
+              >
+                <User className="w-3.5 h-3.5" />
+                Real Profile
+              </button>
+            </div>
+            {identityMode === "anonymous" && (
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Your name will be hidden. Report will show as "Anonymous
+                Citizen" in the public feed.
+              </p>
+            )}
+            {identityMode === "real" && (
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Your profile name will be shown on the report in the public
+                feed.
+              </p>
+            )}
           </div>
 
           {/* Media source selector tabs */}

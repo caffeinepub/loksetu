@@ -25,6 +25,7 @@ import {
   MessageCircle,
   MoreVertical,
   Shield,
+  ThumbsDown,
   ThumbsUp,
   Trash2,
 } from "lucide-react";
@@ -89,6 +90,22 @@ function initials(name: string): string {
     .join("");
 }
 
+const DOWNVOTES_KEY = "loksetu_downvotes";
+
+function loadDownvotes(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(DOWNVOTES_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveDownvotes(data: Record<string, number>) {
+  try {
+    localStorage.setItem(DOWNVOTES_KEY, JSON.stringify(data));
+  } catch {}
+}
+
 interface IssueCardProps {
   issue: Issue;
   index: number;
@@ -109,6 +126,11 @@ export default function IssueCard({
 }: IssueCardProps) {
   const [liked, setLiked] = useState(false);
   const [localUpvotes, setLocalUpvotes] = useState(Number(issue.upvotes));
+  const [disliked, setDisliked] = useState(false);
+  const [localDownvotes, setLocalDownvotes] = useState(() => {
+    const store = loadDownvotes();
+    return store[issue.id.toString()] ?? 0;
+  });
   const [profileOpen, setProfileOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount] = useState(Math.floor(Math.random() * 8) + 1);
@@ -131,7 +153,7 @@ export default function IssueCard({
     })();
 
   const reporterName = isAnon
-    ? `Nagrik #${(Number(issue.id) % 9000) + 1000}`
+    ? "Anonymous Citizen"
     : (() => {
         const txt = issue.reporter?.toText?.() ?? "";
         if (txt === "me" || txt.length < 4) return "You";
@@ -149,6 +171,18 @@ export default function IssueCard({
       return next;
     });
     onUpvote(issue.id);
+  }
+
+  function handleDownvote() {
+    setDisliked((prev) => {
+      const next = !prev;
+      const newCount = localDownvotes + (next ? 1 : -1);
+      setLocalDownvotes(newCount);
+      const store = loadDownvotes();
+      store[issue.id.toString()] = newCount;
+      saveDownvotes(store);
+      return next;
+    });
   }
 
   function handleSaveEdit() {
@@ -173,6 +207,26 @@ export default function IssueCard({
               className="w-full h-full object-cover"
               loading="lazy"
             />
+          </div>
+        )}
+        {(issue as any).localMediaUrl && (
+          <div className="h-36 bg-muted overflow-hidden">
+            {(issue as any).localMediaIsVideo ? (
+              // biome-ignore lint/a11y/useMediaCaption: local civic video
+              <video
+                src={(issue as any).localMediaUrl}
+                className="w-full h-full object-cover"
+                muted
+                playsInline
+              />
+            ) : (
+              <img
+                src={(issue as any).localMediaUrl}
+                alt={issue.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            )}
           </div>
         )}
 
@@ -339,13 +393,33 @@ export default function IssueCard({
                 <span>{commentCount}</span>
               </button>
             </div>
-            <div className="flex items-center gap-1">
-              <ThumbsUp
-                className={`w-3.5 h-3.5 ${liked ? "fill-accent" : ""} text-accent`}
-              />
-              <span className="text-sm font-bold text-accent">
-                {localUpvotes}
-              </span>
+            {/* Vote counts */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <ThumbsUp
+                  className={`w-3.5 h-3.5 ${liked ? "fill-success" : ""} text-success`}
+                />
+                <span className="text-sm font-bold text-success">
+                  {localUpvotes}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={`flex items-center gap-1 text-sm font-bold transition-colors ${
+                  disliked
+                    ? "text-destructive"
+                    : "text-muted-foreground hover:text-destructive"
+                }`}
+                onClick={handleDownvote}
+                data-ocid={`nagrik.toggle.${index + 1}`}
+              >
+                <ThumbsDown
+                  className={`w-3.5 h-3.5 ${
+                    disliked ? "fill-destructive text-destructive" : ""
+                  }`}
+                />
+                <span>{localDownvotes}</span>
+              </button>
             </div>
           </div>
         </div>

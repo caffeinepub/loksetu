@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { Principal } from "@icp-sdk/core/principal";
@@ -14,19 +15,27 @@ import {
   Edit2,
   Heart,
   ImageIcon,
+  Lock,
   MessageCircle,
   MoreVertical,
+  Play,
   Plus,
+  Search,
   Send,
+  Settings,
   ShieldCheck,
+  ThumbsDown,
   Trash2,
   UserCircle,
   Users,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import { toast } from "sonner";
 import CommentsSheet from "../components/CommentsSheet";
+import GroupPostChatSheet from "../components/GroupPostChatSheet";
 import UserProfileSheet from "../components/UserProfileSheet";
 import {
   useCommunityPosts,
@@ -38,6 +47,7 @@ import {
   useSetStatus,
   useStatuses,
 } from "../hooks/useQueries";
+import { addPost as activityAddPost } from "../store/appActivity";
 import { useAppStore } from "../store/appStore";
 
 const SAMPLE_COMMUNITY_POSTS: import("../backend.d").CommunityPost[] = [
@@ -119,7 +129,8 @@ const SAMPLE_COMMUNITIES = [
   {
     id: 1,
     name: "Delhi Traffic & Roads",
-    type: "Public",
+    type: "Public" as const,
+    accessMode: "open" as const,
     members: 4821,
     description:
       "Discuss road conditions, traffic updates, and civic infrastructure in Delhi.",
@@ -128,16 +139,19 @@ const SAMPLE_COMMUNITIES = [
     admins: ["Rajan K.", "Admin"],
     samplePosts: [
       {
+        id: 1,
         author: "Rajan K.",
         text: "NH-48 widening work complete near Mahipalpur — major congestion relief! 🚗",
         likes: 34,
       },
       {
+        id: 2,
         author: "Nagrik #7102",
         text: "Signal timing at Azadpur chowk is broken again. Filed complaint on Loksetu.",
         likes: 12,
       },
       {
+        id: 3,
         author: "Sunita M.",
         text: "Okhla flyover under repair — avoid ITO route this week.",
         likes: 8,
@@ -147,7 +161,8 @@ const SAMPLE_COMMUNITIES = [
   {
     id: 2,
     name: "Mumbai Local Train",
-    type: "Public",
+    type: "Public" as const,
+    accessMode: "open" as const,
     members: 12430,
     description:
       "Real-time updates, delays, and tips for Mumbai's lifeline local train network.",
@@ -156,11 +171,13 @@ const SAMPLE_COMMUNITIES = [
     admins: ["MumbaiMod"],
     samplePosts: [
       {
+        id: 1,
         author: "MumbaiMod",
         text: "⚠️ Harbour Line delay: 15-20 min due to signal failure at Kurla.",
         likes: 89,
       },
       {
+        id: 2,
         author: "Rahul D.",
         text: "Western line running smooth today. AC locals more frequent now! 🙌",
         likes: 44,
@@ -170,7 +187,8 @@ const SAMPLE_COMMUNITIES = [
   {
     id: 3,
     name: "Bengaluru IT Corridor RWA",
-    type: "Private",
+    type: "Private" as const,
+    accessMode: "request" as "open" | "request",
     members: 983,
     description:
       "Resident welfare discussions for the Whitefield and Electronic City corridors.",
@@ -179,11 +197,13 @@ const SAMPLE_COMMUNITIES = [
     admins: ["Priya S.", "Rajesh M."],
     samplePosts: [
       {
+        id: 1,
         author: "Priya S.",
         text: "RWA meeting this Sunday 10AM at Prestige Shantiniketan clubhouse. All residents please attend.",
         likes: 61,
       },
       {
+        id: 2,
         author: "Rajesh M.",
         text: "Security upgrade: new CCTV cameras installed at all 4 entry gates. ✅",
         likes: 27,
@@ -193,7 +213,8 @@ const SAMPLE_COMMUNITIES = [
   {
     id: 4,
     name: "Pune Civic Watch",
-    type: "Public",
+    type: "Public" as const,
+    accessMode: "open" as const,
     members: 3107,
     description:
       "Civic issue tracking, PCMC updates, and PMC announcements for Pune residents.",
@@ -202,16 +223,19 @@ const SAMPLE_COMMUNITIES = [
     admins: ["PuneCivic"],
     samplePosts: [
       {
+        id: 1,
         author: "PuneCivic",
         text: "PMC new water timings: 6-8AM and 6-8PM for Kothrud and Karve Nagar zones.",
         likes: 53,
       },
       {
+        id: 2,
         author: "Aakash P.",
         text: "Potholes on Baner Road finally patched after 3 complaints! Persistence pays. 💪",
         likes: 38,
       },
       {
+        id: 3,
         author: "Nagrik #5541",
         text: "Street lights at Wakad junction not working for 10 days — anyone else?",
         likes: 15,
@@ -256,6 +280,7 @@ function CreateCommunityModal({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<"Public" | "Private" | "Both">("Public");
+  const [accessMode, setAccessMode] = useState<"open" | "request">("open");
 
   function handleCreate() {
     if (!name.trim()) return;
@@ -263,6 +288,7 @@ function CreateCommunityModal({
     setName("");
     setDescription("");
     setType("Public");
+    setAccessMode("open");
     onClose();
   }
 
@@ -348,6 +374,44 @@ function CreateCommunityModal({
                     "Public channel + private group within same community."}
                 </p>
               </div>
+              {(type === "Private" || type === "Both") && (
+                <div>
+                  <Label className="text-xs mb-2 block">
+                    Private Channel Access Mode
+                  </Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-xs rounded-lg border font-semibold transition-colors ${
+                        accessMode === "open"
+                          ? "bg-success text-success-foreground border-success"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                      onClick={() => setAccessMode("open")}
+                      data-ocid="communities.toggle"
+                    >
+                      Open Join
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-xs rounded-lg border font-semibold transition-colors ${
+                        accessMode === "request"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                      onClick={() => setAccessMode("request")}
+                      data-ocid="communities.toggle"
+                    >
+                      Request to Join
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    {accessMode === "open"
+                      ? "Anyone can join directly without approval."
+                      : "Citizens must request to join; you approve or reject."}
+                  </p>
+                </div>
+              )}
               <Button
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-1"
                 onClick={handleCreate}
@@ -365,14 +429,195 @@ function CreateCommunityModal({
 }
 
 // ──────────────────────────────────────────────
+// Admin Settings Sheet
+// ──────────────────────────────────────────────
+function AdminSettingsSheet({
+  community,
+  open,
+  onClose,
+  onUpdate,
+}: {
+  community: Community;
+  open: boolean;
+  onClose: () => void;
+  onUpdate: (updates: Partial<Community>) => void;
+}) {
+  const [allowPosting, setAllowPosting] = useState(community.allowPosting);
+  const [accessMode, setAccessMode] = useState<"open" | "request">(
+    community.accessMode,
+  );
+  const PENDING_REQUESTS = ["Vikram P.", "Sneha M.", "Rohit K."];
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+        />
+      )}
+      {open && (
+        <motion.div
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile bg-card rounded-t-2xl z-50 shadow-nav"
+          data-ocid="communities.modal"
+        >
+          <div className="px-4 pt-4 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-accent" />
+                <h4 className="font-bold text-sm">Channel Settings</h4>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-muted-foreground"
+                data-ocid="communities.close_button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Combined permission toggle */}
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Allow members to post & comment
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    If off, channel is read-only for members
+                  </p>
+                </div>
+                <Switch
+                  checked={allowPosting}
+                  onCheckedChange={(v) => {
+                    setAllowPosting(v);
+                    onUpdate({ allowPosting: v });
+                    toast.success(
+                      v
+                        ? "Members can now post and comment"
+                        : "Channel is now read-only",
+                    );
+                  }}
+                  data-ocid="communities.switch"
+                />
+              </div>
+
+              {/* Access mode (Private only) */}
+              {community.type === "Private" && (
+                <div>
+                  <Label className="text-xs mb-2 block font-semibold">
+                    Access Mode
+                  </Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-xs rounded-lg border font-semibold transition-colors ${
+                        accessMode === "open"
+                          ? "bg-success text-success-foreground border-success"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                      onClick={() => {
+                        setAccessMode("open");
+                        onUpdate({ accessMode: "open" });
+                        toast.success("Access mode updated to Open Join");
+                      }}
+                      data-ocid="communities.toggle"
+                    >
+                      Open Join
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-xs rounded-lg border font-semibold transition-colors ${
+                        accessMode === "request"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                      onClick={() => {
+                        setAccessMode("request");
+                        onUpdate({ accessMode: "request" });
+                        toast.success("Access mode updated to Request to Join");
+                      }}
+                      data-ocid="communities.toggle"
+                    >
+                      Request to Join
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending requests */}
+              {accessMode === "request" && community.type === "Private" && (
+                <div>
+                  <Label className="text-xs mb-2 block font-semibold">
+                    Pending Join Requests ({PENDING_REQUESTS.length})
+                  </Label>
+                  <div className="space-y-2">
+                    {PENDING_REQUESTS.map((name) => (
+                      <div
+                        key={name}
+                        className="flex items-center justify-between bg-muted/50 rounded-xl px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center">
+                            <span className="text-xs font-bold text-accent">
+                              {initials(name)}
+                            </span>
+                          </div>
+                          <span className="text-sm font-medium text-foreground">
+                            {name}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-success text-success-foreground"
+                            onClick={() => toast.success(`${name} approved!`)}
+                            data-ocid="communities.confirm_button"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs text-destructive border-destructive/40"
+                            onClick={() => toast.success(`${name} rejected`)}
+                            data-ocid="communities.cancel_button"
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ──────────────────────────────────────────────
 // Community Detail View
 // ──────────────────────────────────────────────
 function CommunityDetailView({
   community,
   onBack,
+  isAdmin,
 }: {
   community: Community;
   onBack: () => void;
+  isAdmin?: boolean;
 }) {
   const [postText, setPostText] = useState("");
   const [localPosts, setLocalPosts] = useState(community.samplePosts);
@@ -380,13 +625,24 @@ function CommunityDetailView({
   const [localLikes, setLocalLikes] = useState<number[]>(
     community.samplePosts.map((p) => p.likes),
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [commentPostId, setCommentPostId] = useState<number | null>(null);
+  const [chatPostId, setChatPostId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [communityState, setCommunityState] = useState(community);
+
+  const filteredPosts = searchQuery.trim()
+    ? localPosts.filter(
+        (p) =>
+          p.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.author.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : localPosts;
 
   function handleSend() {
     if (!postText.trim()) return;
-    setLocalPosts((prev) => [
-      { author: "You", text: postText, likes: 0 },
-      ...prev,
-    ]);
+    const newPost = { id: Date.now(), author: "You", text: postText, likes: 0 };
+    setLocalPosts((prev) => [newPost, ...prev]);
     setLocalLikes((prev) => [0, ...prev]);
     setPostText("");
     toast.success("Post shared!");
@@ -439,59 +695,107 @@ function CommunityDetailView({
             {community.members.toLocaleString("en-IN")} members
           </p>
         </div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setSettingsOpen(true)}
+            data-ocid="communities.button"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Search bar */}
+      <div className="px-4 py-2 border-b border-border bg-card">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search posts..."
+            className="w-full bg-muted rounded-full pl-8 pr-4 py-1.5 text-xs outline-none text-foreground placeholder:text-muted-foreground"
+            data-ocid="communities.search_input"
+          />
+        </div>
       </div>
 
       {/* Posts */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 pb-24">
-        {localPosts.map((post, idx) => (
-          <motion.div
-            key={`${post.author}-${idx}`}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.04 }}
-            className="bg-card rounded-xl p-3 shadow-card border border-border"
-            data-ocid={`communities.item.${idx + 1}`}
+        {filteredPosts.length === 0 && searchQuery.trim() ? (
+          <div
+            className="text-center py-10"
+            data-ocid="communities.empty_state"
           >
-            <div className="flex items-start gap-2.5">
-              <Avatar className="w-8 h-8 flex-shrink-0">
-                <AvatarFallback className="text-xs bg-accent/10 text-accent font-bold">
-                  {initials(post.author)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-foreground">
-                  {post.author}
-                </p>
-                <p className="text-sm text-foreground mt-1 leading-snug">
-                  {post.text}
-                </p>
-                <div className="flex items-center gap-1 mt-2">
-                  <button
-                    type="button"
-                    className={`flex items-center gap-1 text-xs transition-colors ${
-                      likedIdxs.has(idx)
-                        ? "text-rose-500"
-                        : "text-muted-foreground hover:text-rose-400"
-                    }`}
-                    onClick={() => toggleLike(idx)}
-                    data-ocid={`communities.toggle.${idx + 1}`}
-                  >
-                    <Heart
-                      className={`w-3.5 h-3.5 ${
-                        likedIdxs.has(idx) ? "fill-rose-500" : ""
+            <div className="text-3xl mb-2">🔍</div>
+            <p className="text-sm text-muted-foreground">
+              No posts match "{searchQuery}"
+            </p>
+          </div>
+        ) : (
+          filteredPosts.map((post, idx) => (
+            <motion.div
+              key={`${post.id}-${idx}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.04 }}
+              className="bg-card rounded-xl p-3 shadow-card border border-border"
+              data-ocid={`communities.item.${idx + 1}`}
+            >
+              <div className="flex items-start gap-2.5">
+                <Avatar className="w-8 h-8 flex-shrink-0">
+                  <AvatarFallback className="text-xs bg-accent/10 text-accent font-bold">
+                    {initials(post.author)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-foreground">
+                    {post.author}
+                  </p>
+                  <p className="text-sm text-foreground mt-1 leading-snug">
+                    {post.text}
+                  </p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      type="button"
+                      className={`flex items-center gap-1 text-xs transition-colors ${
+                        likedIdxs.has(idx)
+                          ? "text-rose-500"
+                          : "text-muted-foreground hover:text-rose-400"
                       }`}
-                    />
-                    <span>{localLikes[idx]}</span>
-                  </button>
+                      onClick={() => toggleLike(idx)}
+                      data-ocid={`communities.toggle.${idx + 1}`}
+                    >
+                      <Heart
+                        className={`w-3.5 h-3.5 ${
+                          likedIdxs.has(idx) ? "fill-rose-500" : ""
+                        }`}
+                      />
+                      <span>{localLikes[idx] ?? post.likes}</span>
+                    </button>
+                    {communityState.allowPosting && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors"
+                        onClick={() => setCommentPostId(post.id)}
+                        data-ocid={`communities.item.${idx + 1}`}
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        Comment
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))
+        )}
       </div>
 
       {/* Compose area or read-only banner */}
-      {community.allowPosting ? (
+      {communityState.allowPosting ? (
         <div className="flex items-center gap-2 px-4 py-3 border-t border-border bg-card">
           <Input
             value={postText}
@@ -521,6 +825,44 @@ function CommunityDetailView({
           </div>
         </div>
       )}
+
+      {/* Admin Settings */}
+      <AdminSettingsSheet
+        community={communityState}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onUpdate={(updates) =>
+          setCommunityState((prev) => ({ ...prev, ...updates }) as typeof prev)
+        }
+      />
+
+      {/* Comments */}
+      {commentPostId !== null && (
+        <CommentsSheet
+          open={commentPostId !== null}
+          onClose={() => setCommentPostId(null)}
+          postTitle={
+            localPosts
+              .find((p) => p.id === commentPostId)
+              ?.text?.slice(0, 60) ?? "Channel Post"
+          }
+          postType="post"
+        />
+      )}
+      <AnimatePresence>
+        {chatPostId !== null && (
+          <GroupPostChatSheet
+            open={chatPostId !== null}
+            onClose={() => setChatPostId(null)}
+            postId={`community_${community.id}_post_${chatPostId}`}
+            postText={localPosts.find((p) => p.id === chatPostId)?.text ?? ""}
+            postAuthor={
+              localPosts.find((p) => p.id === chatPostId)?.author ?? ""
+            }
+            canChat={communityState.allowPosting}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -541,6 +883,10 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
   const [localLikeCounts, setLocalLikeCounts] = useState<Map<bigint, bigint>>(
     new Map(),
   );
+  const [dislikedSet, setDislikedSet] = useState<Set<bigint>>(new Set());
+  const [localDislikeCounts, setLocalDislikeCounts] = useState<
+    Map<bigint, number>
+  >(new Map());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [profilePost, setProfilePost] = useState<{
     name: string;
@@ -548,6 +894,7 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
     isAnon: boolean;
   } | null>(null);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [chatPostId2, setChatPostId2] = useState<string | null>(null);
   const [localPosts, setLocalPosts] = useState<
     import("../backend.d").CommunityPost[]
   >([]);
@@ -555,6 +902,10 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
     null,
   );
   const [editLocalContent, setEditLocalContent] = useState("");
+
+  // File input refs for media picking (outside focus traps)
+  const communityGalleryRef = useRef<HTMLInputElement>(null);
+  const communityCameraRef = useRef<HTMLInputElement>(null);
 
   const { addPost, deletePost, editPost } = useAppStore();
 
@@ -597,6 +948,20 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
       selectedFile?.type?.startsWith("video/") || false;
     setLocalPosts((prev) => [newPost, ...prev]);
     addPost(newPost);
+    // Save to appActivity store for ProfileTab display
+    activityAddPost({
+      id: newPost.id.toString(),
+      text: postText,
+      community: "Nagrik Community",
+      city: selectedCity,
+      mediaUrl: mediaObjUrl ?? undefined,
+      mediaType: selectedFile?.type?.startsWith("video/")
+        ? "video"
+        : selectedFile
+          ? "photo"
+          : undefined,
+      timestamp: Date.now(),
+    });
     setPostText("");
     setSelectedFile(null);
     setComposeOpen(false);
@@ -614,8 +979,34 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
     }
   }
 
+  // Portal file inputs rendered outside any Radix focus trap
+  const communityFileInputPortal = ReactDOM.createPortal(
+    <div
+      aria-hidden="true"
+      style={{ position: "fixed", top: -9999, left: -9999, opacity: 0 }}
+    >
+      <input
+        ref={communityGalleryRef}
+        id="community-gallery-input"
+        type="file"
+        accept="image/*,video/*"
+        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+      />
+      <input
+        ref={communityCameraRef}
+        id="community-camera-input"
+        type="file"
+        accept="image/*,video/*"
+        capture="environment"
+        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+      />
+    </div>,
+    document.body,
+  );
+
   return (
     <div className="flex flex-col h-full relative">
+      {communityFileInputPortal}
       <AnimatePresence>
         {joinedBanner && (
           <motion.div
@@ -788,13 +1179,23 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
                         post.content
                       )}
                     </p>
-                    {post.mediaBlob && (
+                    {(post as any).localMediaUrl && (
                       <div className="mt-2 rounded-lg overflow-hidden">
-                        <img
-                          src={post.mediaBlob.getDirectURL()}
-                          alt="post media"
-                          className="w-full max-h-48 object-cover"
-                        />
+                        {(post as any).localMediaIsVideo ? (
+                          // biome-ignore lint/a11y/useMediaCaption: user-uploaded
+                          <video
+                            src={(post as any).localMediaUrl}
+                            controls
+                            playsInline
+                            className="w-full max-h-48 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <img
+                            src={(post as any).localMediaUrl}
+                            alt="post media"
+                            className="w-full max-h-48 object-cover rounded-lg"
+                          />
+                        )}
                       </div>
                     )}
                     {localPostIds.has(post.id.toString()) &&
@@ -871,12 +1272,52 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
                       </button>
                       <button
                         type="button"
+                        className={`flex items-center gap-1 text-xs transition-colors ml-1 ${
+                          dislikedSet.has(post.id)
+                            ? "text-destructive"
+                            : "text-muted-foreground hover:text-destructive"
+                        }`}
+                        onClick={() => {
+                          const isDis = dislikedSet.has(post.id);
+                          setDislikedSet((prev) => {
+                            const next = new Set(prev);
+                            if (isDis) next.delete(post.id);
+                            else next.add(post.id);
+                            return next;
+                          });
+                          setLocalDislikeCounts((prev) => {
+                            const next = new Map(prev);
+                            const cur = next.get(post.id) ?? 0;
+                            next.set(post.id, isDis ? cur - 1 : cur + 1);
+                            return next;
+                          });
+                        }}
+                        data-ocid={`community.toggle.${idx + 1}`}
+                      >
+                        <ThumbsDown
+                          className={`w-3.5 h-3.5 ${
+                            dislikedSet.has(post.id) ? "fill-destructive" : ""
+                          }`}
+                        />
+                        <span>{localDislikeCounts.get(post.id) ?? 0}</span>
+                      </button>
+                      <button
+                        type="button"
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors ml-2"
                         onClick={() => setCommentPostId(post.id.toString())}
                         data-ocid={`community.item.${idx + 1}`}
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
                         <span>Comment</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                        onClick={() => setChatPostId2(post.id.toString())}
+                        data-ocid={`community.item.${idx + 1}`}
+                      >
+                        <span>💬</span>
+                        <span>Chat</span>
                       </button>
                     </div>
                   </div>
@@ -947,7 +1388,7 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
                 data-ocid="community.textarea"
               />
 
-              {/* Identity toggle — pill buttons */}
+              {/* Identity toggle */}
               <div className="mb-3">
                 <p className="text-xs text-muted-foreground mb-2 font-medium">
                   Post as:
@@ -993,53 +1434,51 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
                   />
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="community-gallery-input"
-                  className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center cursor-pointer"
-                  data-ocid="community.upload_button"
-                  title="Photo/Video from Gallery"
-                >
-                  <ImageIcon className="w-4 h-4 text-muted-foreground" />
-                </label>
-                <label
-                  htmlFor="community-camera-input"
-                  className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center cursor-pointer"
-                  title="Take Photo/Video with Camera"
-                >
-                  <Camera className="w-4 h-4 text-muted-foreground" />
-                </label>
-                <input
-                  id="community-gallery-input"
-                  type="file"
-                  accept="image/*,video/*"
-                  className="sr-only"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                />
-                <input
-                  id="community-camera-input"
-                  type="file"
-                  accept="image/*,video/*"
-                  capture="environment"
-                  className="sr-only"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                />
-                {selectedFile &&
-                  (selectedFile.type.startsWith("video/") ? (
+
+              {selectedFile && (
+                <div className="relative mb-3">
+                  {selectedFile.type.startsWith("video/") ? (
+                    // biome-ignore lint/a11y/useMediaCaption: user-uploaded
                     <video
                       src={URL.createObjectURL(selectedFile)}
                       controls
-                      className="max-h-20 rounded-lg mt-1 w-full"
-                    >
-                      <track kind="captions" />
-                    </video>
+                      className="max-h-32 rounded-lg w-full object-cover"
+                    />
                   ) : (
                     <img
                       src={URL.createObjectURL(selectedFile)}
                       alt="preview"
-                      className="max-h-20 rounded-lg mt-1 object-cover"
+                      className="max-h-32 rounded-lg w-full object-cover"
                     />
-                  ))}
+                  )}
+                  <button
+                    type="button"
+                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center"
+                    onClick={() => setSelectedFile(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center cursor-pointer hover:bg-muted/70 transition-colors"
+                  onClick={() => communityGalleryRef.current?.click()}
+                  data-ocid="community.upload_button"
+                  title="Photo/Video from Gallery"
+                >
+                  <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center cursor-pointer hover:bg-muted/70 transition-colors"
+                  onClick={() => communityCameraRef.current?.click()}
+                  title="Take Photo/Video with Camera"
+                >
+                  <Camera className="w-4 h-4 text-muted-foreground" />
+                </button>
                 <Button
                   size="sm"
                   className="ml-auto bg-accent hover:bg-accent/90 text-accent-foreground"
@@ -1077,6 +1516,25 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
           postType="post"
         />
       )}
+      <AnimatePresence>
+        {chatPostId2 && (
+          <GroupPostChatSheet
+            open={!!chatPostId2}
+            onClose={() => setChatPostId2(null)}
+            postId={`nagrik_community_${chatPostId2}`}
+            postText={
+              displayPosts
+                .find((p) => p.id.toString() === chatPostId2)
+                ?.content?.slice(0, 80) ?? "Community Post"
+            }
+            postAuthor={
+              displayPosts.find((p) => p.id.toString() === chatPostId2)
+                ?.displayName ?? "Nagrik"
+            }
+            canChat={true}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1104,7 +1562,6 @@ function ChatsSubTab({ joinedCommunities }: { joinedCommunities: number[] }) {
     }
   }
 
-  // All joined communities including Nagrik (always joined)
   const joinedList = [
     {
       name: "Nagrik Community",
@@ -1213,7 +1670,6 @@ function ChatsSubTab({ joinedCommunities }: { joinedCommunities: number[] }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* My Communities & Channels */}
       <div className="px-4 pt-3 pb-2">
         <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
           My Communities & Channels
@@ -1318,8 +1774,13 @@ function ChatsSubTab({ joinedCommunities }: { joinedCommunities: number[] }) {
 }
 
 // ──────────────────────────────────────────────
-// Status Sub-tab
+// Status Sub-tab  (WhatsApp-style)
 // ──────────────────────────────────────────────
+type LocalStatus = import("../backend.d").Status & {
+  localMediaUrl?: string;
+  localMediaIsVideo?: boolean;
+};
+
 function StatusSubTab({ selectedCity }: { selectedCity: string }) {
   const [statusText, setStatusText] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -1331,7 +1792,6 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
   );
   const [statusMedia, setStatusMedia] = useState<File | null>(null);
   const [statusMediaUrl, setStatusMediaUrl] = useState<string | null>(null);
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [viewingStatus, setViewingStatus] = useState<number | null>(null);
   const [statusProfile, setStatusProfile] = useState<{
     name: string;
@@ -1339,67 +1799,58 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
     isAnon: boolean;
   } | null>(null);
   const [statusCommentIdx, setStatusCommentIdx] = useState<number | null>(null);
+  const [myStatuses, setMyStatuses] = useState<LocalStatus[]>([]);
+
+  // File input refs rendered outside any focus trap via portal
+  const statusGalleryPhotoRef = useRef<HTMLInputElement>(null);
+  const statusGalleryVideoRef = useRef<HTMLInputElement>(null);
+  const statusCameraPhotoRef = useRef<HTMLInputElement>(null);
+  const statusCameraVideoRef = useRef<HTMLInputElement>(null);
+
+  const { data: backendStatuses, isLoading } = useStatuses(selectedCity);
+  const setStatusMutation = useSetStatus();
+
+  const backendList: LocalStatus[] =
+    backendStatuses && backendStatuses.length > 0
+      ? (backendStatuses as LocalStatus[])
+      : (SAMPLE_STATUSES as LocalStatus[]);
+
+  const displayStatuses: LocalStatus[] = [...myStatuses, ...backendList];
 
   function handleMediaSelect(file: File | undefined) {
     if (!file) return;
     if (statusMediaUrl) URL.revokeObjectURL(statusMediaUrl);
     setStatusMedia(file);
     setStatusMediaUrl(URL.createObjectURL(file));
-    setShowMediaPicker(false);
   }
-
-  const { data: statuses, isLoading } = useStatuses("");
-  const setStatus = useSetStatus();
-
-  interface LocalStatus {
-    id: number;
-    displayName: string;
-    city: string;
-    content: string;
-    timestamp: bigint;
-    likeCount: bigint;
-    mediaBlob: null;
-    localMediaUrl: string | null;
-    localMediaIsVideo: boolean;
-  }
-  const [localStatuses, setLocalStatuses] = useState<LocalStatus[]>([]);
-  const displayStatuses =
-    statuses && statuses.length > 0
-      ? [...localStatuses, ...statuses]
-      : localStatuses.length > 0
-        ? [...localStatuses, ...SAMPLE_STATUSES]
-        : SAMPLE_STATUSES;
 
   async function handlePost() {
     if (!statusText.trim() && !statusMedia) return;
-    const newLocalStatus = {
-      id: Date.now(),
+    const mediaObjUrl = statusMedia ? URL.createObjectURL(statusMedia) : null;
+    const newStatus: LocalStatus = {
       displayName: "You",
       city: selectedCity,
-      content: statusText || "",
-      timestamp: BigInt(Date.now()) * BigInt(1_000_000),
-      likeCount: BigInt(0),
-      mediaBlob: null,
-      localMediaUrl: statusMediaUrl || null,
+      content: statusText,
+      timestamp: BigInt(Date.now() * 1_000_000),
+      author: null as any,
+      localMediaUrl: mediaObjUrl ?? undefined,
       localMediaIsVideo: statusMedia?.type?.startsWith("video/") || false,
     };
-    // Always add locally so media is visible
-    setLocalStatuses((prev) => [newLocalStatus as never, ...prev]);
-    try {
-      await setStatus.mutateAsync({
-        city: selectedCity,
-        content: statusText || (statusMedia ? "[Media]" : ""),
-        photoBlobId: null,
-      });
-      toast.success("Status posted!");
-    } catch (err) {
-      console.error("Failed to post status:", err);
-      toast.success("Status posted!");
-    }
+    setMyStatuses((prev) => [newStatus, ...prev]);
     setStatusText("");
     setStatusMedia(null);
     setStatusMediaUrl(null);
     setAddOpen(false);
+    toast.success("Status shared!");
+    try {
+      await setStatusMutation.mutateAsync({
+        content: statusText,
+        city: selectedCity,
+        photoBlobId: null,
+      });
+    } catch {
+      // Local status already shown
+    }
   }
 
   function toggleLike(idx: number) {
@@ -1422,65 +1873,127 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
     setReplyOpen(null);
   }
 
+  // Portal for status file inputs
+  const statusFileInputPortal = ReactDOM.createPortal(
+    <div
+      aria-hidden="true"
+      style={{ position: "fixed", top: -9999, left: -9999, opacity: 0 }}
+    >
+      <input
+        ref={statusGalleryPhotoRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
+      />
+      <input
+        ref={statusGalleryVideoRef}
+        type="file"
+        accept="video/*"
+        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
+      />
+      <input
+        ref={statusCameraPhotoRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
+      />
+      <input
+        ref={statusCameraVideoRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
+        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
+      />
+    </div>,
+    document.body,
+  );
+
   return (
     <div className="flex flex-col h-full">
-      {/* Status avatars row */}
-      <div className="px-4 py-3">
+      {statusFileInputPortal}
+
+      {/* WhatsApp-style status circles — 80px */}
+      <div className="px-4 py-3 border-b border-border">
         <div
-          className="flex items-center gap-3 overflow-x-auto pb-1"
+          className="flex items-end gap-3 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
         >
-          {/* Add status */}
+          {/* Add your status */}
           <button
             type="button"
-            className="flex flex-col items-center gap-1 flex-shrink-0"
+            className="flex flex-col items-center gap-1.5 flex-shrink-0"
             onClick={() => setAddOpen(true)}
             data-ocid="status.open_modal_button"
           >
-            <div className="w-12 h-12 rounded-full border-2 border-dashed border-accent flex items-center justify-center">
-              <Plus className="w-5 h-5 text-accent" />
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-2 border-dashed border-accent flex items-center justify-center bg-accent/5">
+                <Plus className="w-7 h-7 text-accent" />
+              </div>
             </div>
-            <span className="text-xs text-muted-foreground">Add</span>
+            <span className="text-[10px] text-muted-foreground font-medium">
+              Your Status
+            </span>
           </button>
-          {/* Status avatars */}
-          {displayStatuses.map((s, i) => (
-            <button
-              key={`avatar-${s.displayName}-${s.city}`}
-              type="button"
-              className="flex flex-col items-center gap-1 flex-shrink-0"
-              onClick={() => setViewingStatus(i)}
-              data-ocid={`status.item.${i + 1}`}
-            >
-              <div className="w-12 h-12 rounded-full border-2 border-accent p-0.5">
-                <div
-                  className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center overflow-hidden"
-                  style={
-                    (s as LocalStatus).localMediaUrl &&
-                    !(s as LocalStatus).localMediaIsVideo
-                      ? {
-                          backgroundImage: `url(${(s as LocalStatus).localMediaUrl})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                      : undefined
-                  }
-                >
-                  {!(s as LocalStatus).localMediaUrl && (
-                    <span className="text-xs font-bold text-accent">
-                      {initials(s.displayName)}
-                    </span>
+
+          {/* Other statuses */}
+          {displayStatuses.map((s, i) => {
+            const hasPhoto = s.localMediaUrl && !s.localMediaIsVideo;
+            const hasVideo = s.localMediaUrl && s.localMediaIsVideo;
+            return (
+              <button
+                key={`avatar-${s.displayName}-${i}`}
+                type="button"
+                className="flex flex-col items-center gap-1.5 flex-shrink-0"
+                onClick={() => setViewingStatus(i)}
+                data-ocid={`status.item.${i + 1}`}
+              >
+                <div className="relative">
+                  {/* Gradient ring */}
+                  <div className="w-20 h-20 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500">
+                    <div
+                      className="w-full h-full rounded-full overflow-hidden border-2 border-card"
+                      style={
+                        hasPhoto
+                          ? {
+                              backgroundImage: `url(${s.localMediaUrl})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                          : {
+                              background:
+                                "linear-gradient(135deg, oklch(var(--accent)/0.15), oklch(var(--primary)/0.2))",
+                            }
+                      }
+                    >
+                      {!hasPhoto && (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-xl font-bold text-primary">
+                            {initials(s.displayName)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Video play overlay */}
+                  {hasVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center">
+                        <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-              <span className="text-xs text-foreground truncate max-w-[48px]">
-                {s.displayName.split(" ")[0]}
-              </span>
-            </button>
-          ))}
+                <span className="text-[10px] text-foreground truncate max-w-[72px] font-medium">
+                  {s.displayName.split(" ")[0]}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="px-4 mb-2">
+      <div className="px-4 py-2">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
           Recent Updates · Nagrik Community
         </p>
@@ -1500,7 +2013,7 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
             ))
           : displayStatuses.map((s, i) => (
               <motion.div
-                key={`status-${s.displayName}-${s.city}-${i}`}
+                key={`status-${s.displayName}-${i}`}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
@@ -1510,7 +2023,7 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
-                    className="w-9 h-9 rounded-full border-2 border-accent p-0.5 flex-shrink-0 hover:opacity-80 transition-opacity"
+                    className="flex-shrink-0 hover:opacity-80 transition-opacity"
                     onClick={() =>
                       setStatusProfile({
                         name: s.displayName,
@@ -1520,10 +2033,27 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                     }
                     data-ocid={`status.item.${i + 1}`}
                   >
-                    <div className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-accent">
-                        {initials(s.displayName)}
-                      </span>
+                    <div className="w-9 h-9 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500">
+                      <div
+                        className="w-full h-full rounded-full border border-card overflow-hidden"
+                        style={
+                          s.localMediaUrl && !s.localMediaIsVideo
+                            ? {
+                                backgroundImage: `url(${s.localMediaUrl})`,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                              }
+                            : { background: "oklch(var(--accent)/0.15)" }
+                        }
+                      >
+                        {(!s.localMediaUrl || s.localMediaIsVideo) && (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-xs font-bold text-accent">
+                              {initials(s.displayName)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </button>
                   <div className="flex-1 min-w-0">
@@ -1551,20 +2081,19 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                     <p className="text-sm text-foreground mt-0.5 leading-snug">
                       {s.content}
                     </p>
-                    {((s as any).localMediaUrl || (s as any).photoBlob) && (
+                    {(s.localMediaUrl || (s as any).photoBlob) && (
                       <div className="mt-2 rounded-lg overflow-hidden">
-                        {(s as any).localMediaIsVideo ? (
+                        {s.localMediaIsVideo ? (
+                          // biome-ignore lint/a11y/useMediaCaption: user-uploaded
                           <video
-                            src={(s as any).localMediaUrl}
+                            src={s.localMediaUrl}
                             controls
                             playsInline
                             className="w-full max-h-64 object-cover rounded-lg"
-                          >
-                            <track kind="captions" />
-                          </video>
-                        ) : (s as any).localMediaUrl ? (
+                          />
+                        ) : s.localMediaUrl ? (
                           <img
-                            src={(s as any).localMediaUrl}
+                            src={s.localMediaUrl}
                             alt="status"
                             className="w-full max-h-64 object-cover rounded-lg"
                           />
@@ -1577,7 +2106,6 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                         ) : null}
                       </div>
                     )}
-                    {/* Like + Reply actions */}
                     <div className="flex items-center gap-3 mt-2">
                       <button
                         type="button"
@@ -1599,8 +2127,17 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                       <button
                         type="button"
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors"
+                        onClick={() => setReplyOpen(i)}
+                        data-ocid={`status.item.${i + 1}`}
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>Reply</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors"
                         onClick={() => setStatusCommentIdx(i)}
-                        data-ocid={`status.button.${i + 1}`}
+                        data-ocid={`status.item.${i + 1}`}
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
                         <span>Comment</span>
@@ -1613,38 +2150,6 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
       </div>
 
       {/* Add Status Sheet */}
-      {/* Hidden file inputs — always mounted so labels work on mobile */}
-      <input
-        id="status-gallery-photo"
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
-      />
-      <input
-        id="status-gallery-video"
-        type="file"
-        accept="video/*"
-        className="sr-only"
-        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
-      />
-      <input
-        id="status-camera-photo"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
-      />
-      <input
-        id="status-camera-video"
-        type="file"
-        accept="video/*"
-        capture="environment"
-        className="sr-only"
-        onChange={(e) => handleMediaSelect(e.target.files?.[0])}
-      />
-
       <AnimatePresence>
         {addOpen && (
           <motion.div
@@ -1665,13 +2170,11 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
           >
             <div className="px-4 pt-4 pb-8">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-sm flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-accent" />
-                  Add Status
-                </h4>
+                <h4 className="font-bold text-sm">Add Status</h4>
                 <button
                   type="button"
                   onClick={() => setAddOpen(false)}
+                  className="text-muted-foreground"
                   data-ocid="status.close_button"
                 >
                   ✕
@@ -1680,21 +2183,20 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
               <Textarea
                 value={statusText}
                 onChange={(e) => setStatusText(e.target.value)}
-                placeholder={`What's happening in ${selectedCity}?`}
+                placeholder="What's on your mind?"
                 className="resize-none min-h-[80px] text-sm mb-3"
                 data-ocid="status.textarea"
               />
-              {/* Media preview */}
+
               {statusMediaUrl && (
                 <div className="relative mb-3">
                   {statusMedia?.type.startsWith("video/") ? (
+                    // biome-ignore lint/a11y/useMediaCaption: user-uploaded
                     <video
-                      src={statusMediaUrl ?? ""}
+                      src={statusMediaUrl}
                       controls
                       className="w-full max-h-40 rounded-lg object-cover"
-                    >
-                      <track kind="captions" />
-                    </video>
+                    />
                   ) : (
                     <img
                       src={statusMediaUrl}
@@ -1715,111 +2217,64 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                   </button>
                 </div>
               )}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={() => setShowMediaPicker(true)}
+
+              {/* Media picker buttons */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted hover:bg-muted/70 text-sm font-medium transition-colors text-left"
+                  onClick={() => statusGalleryPhotoRef.current?.click()}
                   data-ocid="status.upload_button"
                 >
-                  <ImageIcon className="w-3.5 h-3.5" />{" "}
-                  {statusMedia
-                    ? statusMedia.type.startsWith("video/")
-                      ? "Video ✓"
-                      : "Photo ✓"
-                    : "Photo/Video"}
-                </Button>
-                <Button
-                  size="sm"
-                  className="ml-auto bg-accent hover:bg-accent/90 text-accent-foreground"
-                  onClick={handlePost}
-                  disabled={
-                    (!statusText.trim() && !statusMedia) || setStatus.isPending
-                  }
-                  data-ocid="status.submit_button"
+                  <ImageIcon className="w-4 h-4 text-accent flex-shrink-0" />
+                  Photo from Gallery
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted hover:bg-muted/70 text-sm font-medium transition-colors text-left"
+                  onClick={() => statusGalleryVideoRef.current?.click()}
+                  data-ocid="status.upload_button"
                 >
-                  {setStatus.isPending ? "Posting..." : "Share Status"}
-                </Button>
+                  <Play className="w-4 h-4 text-accent flex-shrink-0" />
+                  Video from Gallery
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted hover:bg-muted/70 text-sm font-medium transition-colors text-left"
+                  onClick={() => statusCameraPhotoRef.current?.click()}
+                  data-ocid="status.upload_button"
+                >
+                  <Camera className="w-4 h-4 text-accent flex-shrink-0" />
+                  Take Photo
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted hover:bg-muted/70 text-sm font-medium transition-colors text-left"
+                  onClick={() => statusCameraVideoRef.current?.click()}
+                  data-ocid="status.upload_button"
+                >
+                  <Camera className="w-4 h-4 text-accent flex-shrink-0" />
+                  Record Video
+                </button>
               </div>
-              {/* File inputs rendered outside this block — see below */}
-              {/* Media Picker Sheet */}
-              <AnimatePresence>
-                {showMediaPicker && (
-                  <>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 bg-black/50 z-[60]"
-                      onClick={() => setShowMediaPicker(false)}
-                    />
-                    <motion.div
-                      initial={{ y: "100%" }}
-                      animate={{ y: 0 }}
-                      exit={{ y: "100%" }}
-                      transition={{
-                        type: "spring",
-                        damping: 25,
-                        stiffness: 300,
-                      }}
-                      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile bg-card rounded-t-2xl z-[61] shadow-nav pb-8"
-                    >
-                      <div className="px-4 pt-4 pb-2">
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-bold text-sm">
-                            Add Photo or Video
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => setShowMediaPicker(false)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          {[
-                            {
-                              label: "📷  Photo from Gallery",
-                              inputId: "status-gallery-photo",
-                            },
-                            {
-                              label: "🎥  Video from Gallery",
-                              inputId: "status-gallery-video",
-                            },
-                            {
-                              label: "📸  Take Photo (Camera)",
-                              inputId: "status-camera-photo",
-                            },
-                            {
-                              label: "🎬  Record Video (Camera)",
-                              inputId: "status-camera-video",
-                            },
-                          ].map((opt) => (
-                            <label
-                              key={opt.label}
-                              htmlFor={opt.inputId}
-                              className="w-full block text-left px-4 py-3 rounded-xl bg-muted hover:bg-muted/80 text-sm font-medium transition-colors cursor-pointer"
-                              onClick={() => setShowMediaPicker(false)}
-                              onKeyDown={(e) =>
-                                e.key === "Enter" && setShowMediaPicker(false)
-                              }
-                            >
-                              {opt.label}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+
+              <Button
+                className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                onClick={handlePost}
+                disabled={
+                  (!statusText.trim() && !statusMedia) ||
+                  setStatusMutation.isPending
+                }
+                data-ocid="status.submit_button"
+              >
+                {setStatusMutation.isPending ? "Posting..." : "Share Status"}
+              </Button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Status Viewer Overlay */}
+      {/* Full-screen Status Viewer */}
       <AnimatePresence>
         {viewingStatus !== null && (
           <motion.div
@@ -1829,7 +2284,6 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/95 z-[70] flex flex-col"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-4 pt-10 pb-4">
               <button
                 type="button"
@@ -1845,12 +2299,30 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                 }}
                 data-ocid="status.button"
               >
-                <div className="w-10 h-10 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center">
-                  <span className="text-xs font-bold text-accent">
-                    {initials(
-                      displayStatuses[viewingStatus]?.displayName || "?",
+                <div className="w-10 h-10 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 to-orange-500">
+                  <div
+                    className="w-full h-full rounded-full border border-white/20 overflow-hidden"
+                    style={
+                      displayStatuses[viewingStatus]?.localMediaUrl &&
+                      !displayStatuses[viewingStatus]?.localMediaIsVideo
+                        ? {
+                            backgroundImage: `url(${displayStatuses[viewingStatus]?.localMediaUrl})`,
+                            backgroundSize: "cover",
+                          }
+                        : { background: "oklch(0.5 0.15 50)" }
+                    }
+                  >
+                    {(!displayStatuses[viewingStatus]?.localMediaUrl ||
+                      displayStatuses[viewingStatus]?.localMediaIsVideo) && (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-xs font-bold text-white">
+                          {initials(
+                            displayStatuses[viewingStatus]?.displayName || "?",
+                          )}
+                        </span>
+                      </div>
                     )}
-                  </span>
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm font-bold text-white">
@@ -1858,7 +2330,9 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                   </p>
                   <p className="text-xs text-white/60">
                     {displayStatuses[viewingStatus]?.city} ·{" "}
-                    {timeAgo(displayStatuses[viewingStatus]?.timestamp)}
+                    {timeAgo(
+                      displayStatuses[viewingStatus]?.timestamp ?? BigInt(0),
+                    )}
                   </p>
                 </div>
               </button>
@@ -1871,35 +2345,35 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                 ✕
               </button>
             </div>
+
             {/* Media */}
             <div className="flex-1 flex items-center justify-center px-4">
-              {(displayStatuses[viewingStatus] as any)?.localMediaIsVideo ? (
+              {displayStatuses[viewingStatus]?.localMediaIsVideo ? (
+                // biome-ignore lint/a11y/useMediaCaption: user-uploaded
                 <video
-                  src={(displayStatuses[viewingStatus] as any)?.localMediaUrl}
+                  src={displayStatuses[viewingStatus]?.localMediaUrl}
                   controls
                   autoPlay
                   playsInline
-                  className="w-full rounded-xl max-h-[60vh] object-contain"
-                >
-                  <track kind="captions" />
-                </video>
-              ) : (displayStatuses[viewingStatus] as any)?.localMediaUrl ? (
+                  className="w-full max-h-[60vh] rounded-xl object-contain"
+                />
+              ) : displayStatuses[viewingStatus]?.localMediaUrl ? (
                 <img
-                  src={(displayStatuses[viewingStatus] as any)?.localMediaUrl}
-                  alt="status"
-                  className="w-full rounded-xl max-h-[60vh] object-contain"
+                  src={displayStatuses[viewingStatus]?.localMediaUrl}
+                  alt="Status"
+                  className="w-full max-h-[60vh] object-contain rounded-xl"
                 />
               ) : (displayStatuses[viewingStatus] as any)?.photoBlob ? (
                 <img
                   src={(
                     displayStatuses[viewingStatus] as any
-                  )?.photoBlob?.getDirectURL()}
-                  alt="status"
-                  className="w-full rounded-xl max-h-[60vh] object-contain"
+                  ).photoBlob.getDirectURL()}
+                  alt="Status"
+                  className="w-full max-h-[60vh] object-contain rounded-xl"
                 />
               ) : (
-                <div className="w-full aspect-square rounded-2xl bg-accent/10 flex items-center justify-center">
-                  <span className="text-4xl font-bold text-accent">
+                <div className="w-48 h-48 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
+                  <span className="text-5xl font-black text-white">
                     {initials(
                       displayStatuses[viewingStatus]?.displayName || "?",
                     )}
@@ -1907,58 +2381,57 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
                 </div>
               )}
             </div>
-            {/* Content + actions */}
-            <div className="px-4 pb-safe pb-8">
-              {displayStatuses[viewingStatus]?.content && (
-                <p className="text-white text-sm mb-4 leading-relaxed">
+
+            {/* Text content */}
+            {displayStatuses[viewingStatus]?.content && (
+              <div className="px-6 py-4">
+                <p className="text-white text-base text-center leading-relaxed">
                   {displayStatuses[viewingStatus]?.content}
                 </p>
-              )}
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-white/70 hover:text-rose-400 transition-colors"
-                  onClick={() => {
-                    toggleLike(viewingStatus);
-                  }}
-                  data-ocid="status.toggle"
-                >
-                  <Heart
-                    className={`w-5 h-5 ${likedIdxs.has(viewingStatus) ? "fill-rose-500 text-rose-500" : ""}`}
-                  />
-                  <span className="text-sm">
-                    {likeCounts[viewingStatus] ?? 0}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-white/70 hover:text-accent transition-colors"
-                  onClick={() => {
-                    setStatusCommentIdx(viewingStatus);
-                    setViewingStatus(null);
-                  }}
-                  data-ocid="status.button"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  <span className="text-sm">Comment</span>
-                </button>
               </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center justify-center gap-6 pb-10">
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1"
+                onClick={() => {
+                  if (viewingStatus !== null) toggleLike(viewingStatus);
+                }}
+                data-ocid="status.toggle"
+              >
+                <Heart
+                  className={`w-6 h-6 ${
+                    viewingStatus !== null && likedIdxs.has(viewingStatus)
+                      ? "fill-rose-500 text-rose-500"
+                      : "text-white/70"
+                  }`}
+                />
+                <span className="text-xs text-white/60">
+                  {viewingStatus !== null
+                    ? (likeCounts[viewingStatus] ?? 0)
+                    : 0}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1"
+                onClick={() => {
+                  setViewingStatus(null);
+                  if (viewingStatus !== null) setReplyOpen(viewingStatus);
+                }}
+                data-ocid="status.button"
+              >
+                <MessageCircle className="w-6 h-6 text-white/70" />
+                <span className="text-xs text-white/60">Reply</span>
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Reply Sheet */}
       <AnimatePresence>
-        {replyOpen !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setReplyOpen(null)}
-          />
-        )}
         {replyOpen !== null && (
           <motion.div
             initial={{ y: "100%" }}
@@ -2037,7 +2510,7 @@ function StatusSubTab({ selectedCity }: { selectedCity: string }) {
 }
 
 // ──────────────────────────────────────────────
-// Communities Sub-tab
+// Communities Sub-tab (Groups)
 // ──────────────────────────────────────────────
 function CommunitiesSubTab({
   joinedCommunities,
@@ -2050,24 +2523,58 @@ function CommunitiesSubTab({
   const [activeCommunity, setActiveCommunity] = useState<Community | null>(
     null,
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pendingRequests, setPendingRequests] = useState<Set<number>>(
+    new Set(),
+  );
 
-  function handleJoin(id: number) {
-    onJoin(id);
-    toast.success("Joined community! Check My Chats.");
+  function handleJoin(comm: Community) {
+    if (comm.type === "Public" || comm.accessMode === "open") {
+      onJoin(comm.id);
+      toast.success("Joined community! Check My Chats.");
+    } else {
+      // Request to join
+      setPendingRequests((prev) => new Set([...prev, comm.id]));
+      toast.success("Join request sent! Waiting for admin approval.");
+    }
   }
+
+  const filteredCommunities = searchQuery.trim()
+    ? SAMPLE_COMMUNITIES.filter(
+        (c) =>
+          c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.description.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : SAMPLE_COMMUNITIES;
 
   if (activeCommunity) {
     return (
       <CommunityDetailView
         community={activeCommunity}
         onBack={() => setActiveCommunity(null)}
+        isAdmin={activeCommunity.admins.includes("Admin")}
       />
     );
   }
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="px-4 py-3">
+      {/* Search */}
+      <div className="px-4 py-3 border-b border-border bg-card">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search communities & channels..."
+            className="w-full bg-muted rounded-full pl-8 pr-4 py-2 text-sm outline-none text-foreground placeholder:text-muted-foreground"
+            data-ocid="communities.search_input"
+          />
+        </div>
+      </div>
+
+      <div className="px-4 py-2">
         <h3 className="text-sm font-bold text-foreground">
           Communities & Channels
         </h3>
@@ -2077,72 +2584,129 @@ function CommunitiesSubTab({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-3">
-        {SAMPLE_COMMUNITIES.map((comm, i) => (
-          <motion.div
-            key={comm.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="bg-card rounded-xl p-4 border border-border shadow-card"
-            data-ocid={`communities.item.${i + 1}`}
+        {filteredCommunities.length === 0 && (
+          <div
+            className="text-center py-12"
+            data-ocid="communities.empty_state"
           >
-            <div className="flex items-start gap-3">
-              <button
-                type="button"
-                className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-xl flex-shrink-0"
-                onClick={() => setActiveCommunity(comm)}
-              >
-                {comm.emoji}
-              </button>
-              <div className="flex-1 min-w-0">
+            <div className="text-3xl mb-2">🔍</div>
+            <p className="text-sm text-muted-foreground">
+              No communities match "{searchQuery}"
+            </p>
+          </div>
+        )}
+        {filteredCommunities.map((comm, i) => {
+          const isJoined = joinedCommunities.includes(comm.id);
+          const isPending = pendingRequests.has(comm.id);
+          const isPrivate = comm.type === "Private";
+          const needsRequest = isPrivate && comm.accessMode === "request";
+
+          return (
+            <motion.div
+              key={comm.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              className="bg-card rounded-xl p-4 border border-border shadow-card"
+              data-ocid={`communities.item.${i + 1}`}
+            >
+              <div className="flex items-start gap-3">
                 <button
                   type="button"
-                  className="text-left w-full"
-                  onClick={() => setActiveCommunity(comm)}
+                  className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-xl flex-shrink-0"
+                  onClick={() =>
+                    isJoined ? setActiveCommunity(comm) : undefined
+                  }
                 >
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-bold text-foreground truncate">
-                      {comm.name}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
-                        comm.type === "Private"
-                          ? "border-orange-400 text-orange-600"
-                          : "border-success text-success"
-                      }`}
-                    >
-                      {comm.type}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-snug mb-2">
-                    {comm.description}
-                  </p>
+                  {comm.emoji}
                 </button>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    <Users className="w-3 h-3 inline mr-0.5" />
-                    {comm.members.toLocaleString("en-IN")} members
-                  </span>
-                  {joinedCommunities.includes(comm.id) ? (
-                    <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full">
-                      ✓ Joined
+                <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    className="text-left w-full"
+                    onClick={() =>
+                      isJoined ? setActiveCommunity(comm) : undefined
+                    }
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-bold text-foreground truncate">
+                        {comm.name}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
+                          isPrivate
+                            ? "border-orange-400 text-orange-600"
+                            : "border-success text-success"
+                        }`}
+                      >
+                        {comm.type}
+                      </Badge>
+                      {isPrivate && (
+                        <Lock className="w-3 h-3 text-orange-400 flex-shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-snug mb-2">
+                      {comm.description}
+                    </p>
+                  </button>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      <Users className="w-3 h-3 inline mr-0.5" />
+                      {comm.members.toLocaleString("en-IN")} members
                     </span>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs bg-accent hover:bg-accent/90 text-accent-foreground"
-                      onClick={() => handleJoin(comm.id)}
-                      data-ocid={`communities.primary_button.${i + 1}`}
-                    >
-                      Join
-                    </Button>
+                    {isJoined ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full">
+                          ✓ Joined
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setActiveCommunity(comm)}
+                          data-ocid={`communities.primary_button.${i + 1}`}
+                        >
+                          Open
+                        </Button>
+                      </div>
+                    ) : isPending ? (
+                      <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                        ⏳ Pending
+                      </span>
+                    ) : needsRequest ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-orange-400 text-orange-600 hover:bg-orange-50"
+                        onClick={() => handleJoin(comm)}
+                        data-ocid={`communities.primary_button.${i + 1}`}
+                      >
+                        Request to Join
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs bg-accent hover:bg-accent/90 text-accent-foreground"
+                        onClick={() => handleJoin(comm)}
+                        data-ocid={`communities.primary_button.${i + 1}`}
+                      >
+                        Join
+                      </Button>
+                    )}
+                  </div>
+                  {isPrivate && !isJoined && !isPending && (
+                    <p className="text-[10px] text-muted-foreground mt-1.5">
+                      {needsRequest
+                        ? "🔒 Admin approval required to join"
+                        : "🔓 Anyone can join directly"}
+                    </p>
                   )}
                 </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Create FAB */}

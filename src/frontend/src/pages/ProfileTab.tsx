@@ -16,16 +16,27 @@ import {
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { UserRole, useCallerRole, useUserStats } from "../hooks/useQueries";
+import {
+  type MyPost,
+  type MyReport,
+  deletePost as activityDeletePost,
+  deleteReport as activityDeleteReport,
+  getPosts,
+  getReports,
+} from "../store/appActivity";
 import { useAppStore } from "../store/appStore";
 
 const MAX_REPORTS = 50;
 
-function timeAgo(timestamp: bigint): string {
-  const diffMs = Date.now() - Number(timestamp) / 1_000_000;
+function timeAgo(timestamp: bigint | number): string {
+  const diffMs =
+    typeof timestamp === "number"
+      ? Date.now() - timestamp
+      : Date.now() - Number(timestamp) / 1_000_000;
   const diffHrs = Math.floor(diffMs / 3_600_000);
   const diffMins = Math.floor(diffMs / 60_000);
   if (diffHrs > 24) return `${Math.floor(diffHrs / 24)}d ago`;
@@ -43,7 +54,55 @@ export default function ProfileTab() {
   const [nameInput, setNameInput] = useState("Rohan Sharma");
   const [guestMode, setGuestMode] = useState(false);
 
-  const { myReports, myPosts, deleteReport, deletePost } = useAppStore();
+  const { deleteReport: storeDeleteReport, deletePost: storeDeletePost } =
+    useAppStore();
+
+  // Activity store (persists media URLs and is written by all post/report flows)
+  const [activityReports, setActivityReports] = useState<MyReport[]>(() =>
+    getReports(),
+  );
+  const [activityPosts, setActivityPosts] = useState<MyPost[]>(() =>
+    getPosts(),
+  );
+
+  // Reload activity data when the tab becomes visible
+  useEffect(() => {
+    function reload() {
+      setActivityReports(getReports());
+      setActivityPosts(getPosts());
+    }
+    window.addEventListener("focus", reload);
+    window.addEventListener("loksetu:activity", reload);
+    // Also reload on visibility change (mobile)
+    document.addEventListener("visibilitychange", reload);
+    return () => {
+      window.removeEventListener("focus", reload);
+      window.removeEventListener("loksetu:activity", reload);
+      document.removeEventListener("visibilitychange", reload);
+    };
+  }, []);
+
+  // Merge: prefer activityReports (has mediaUrl) and fall back to storeReports
+  const mergedReports = activityReports.length > 0 ? activityReports : [];
+  const mergedPosts = activityPosts.length > 0 ? activityPosts : [];
+
+  function handleDeleteReport(id: string) {
+    activityDeleteReport(id);
+    setActivityReports(getReports());
+    try {
+      storeDeleteReport(BigInt(id));
+    } catch {}
+    toast.success("Report removed from profile");
+  }
+
+  function handleDeletePost(id: string) {
+    activityDeletePost(id);
+    setActivityPosts(getPosts());
+    try {
+      storeDeletePost(BigInt(id));
+    } catch {}
+    toast.success("Post removed from profile");
+  }
 
   const isGuest =
     guestMode ||
@@ -210,7 +269,7 @@ export default function ProfileTab() {
               data-ocid="profile.tab"
             >
               <FileText className="w-3.5 h-3.5" />
-              My Reports ({myReports.length})
+              My Reports ({mergedReports.length})
             </TabsTrigger>
             <TabsTrigger
               value="posts"
@@ -218,23 +277,25 @@ export default function ProfileTab() {
               data-ocid="profile.tab"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              My Posts ({myPosts.length})
+              My Posts ({mergedPosts.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="reports" className="mt-3 space-y-2">
-            {myReports.length === 0 ? (
+            {mergedReports.length === 0 ? (
               <div className="text-center py-8" data-ocid="profile.empty_state">
                 <div className="text-3xl mb-2">📋</div>
-                <p className="text-sm text-muted-foreground">No reports yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  You haven't reported any issues yet.
+                </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Report a civic issue from the Nagrik tab.
+                  Tap the + button in the Nagrik tab to report a civic issue.
                 </p>
               </div>
             ) : (
-              myReports.map((report, idx) => (
+              mergedReports.map((report, idx) => (
                 <motion.div
-                  key={report.id.toString()}
+                  key={report.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.04 }}
@@ -248,48 +309,46 @@ export default function ProfileTab() {
                           variant="outline"
                           className="text-[10px] px-1.5 py-0"
                         >
-                          {String(report.category).replace(/[{}]/g, "") ||
-                            "Issue"}
+                          {report.category.replace(/[{}]/g, "") || "Issue"}
                         </Badge>
-                        <span className="text-[10px] text-muted-foreground">
+                        {report.city && (
+                          <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                            📍 {report.city}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground ml-auto">
                           {timeAgo(report.timestamp)}
                         </span>
                       </div>
                       <p className="text-sm font-semibold text-foreground leading-snug">
                         {report.title}
                       </p>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                        {report.description}
-                        {(report as any).localMediaIsVideo &&
-                          (report as any).localMediaUrl && (
-                            // biome-ignore lint/a11y/useMediaCaption: user-uploaded civic report video
-                            <video
-                              src={(report as any).localMediaUrl}
-                              controls
-                              playsInline
-                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
-                            />
-                          )}
-                        {!(report as any).localMediaIsVideo &&
-                          (report as any).localMediaUrl && (
-                            <img
-                              src={(report as any).localMediaUrl}
-                              alt="report media"
-                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
-                            />
-                          )}
-                      </p>
-                      <p className="text-[10px] text-primary mt-1">
-                        📍 {report.gpsLocation}
-                      </p>
+                      {report.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                          {report.description}
+                        </p>
+                      )}
+                      {report.mediaType === "video" && report.mediaUrl && (
+                        // biome-ignore lint/a11y/useMediaCaption: user-uploaded civic report video
+                        <video
+                          src={report.mediaUrl}
+                          controls
+                          playsInline
+                          className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                        />
+                      )}
+                      {report.mediaType === "photo" && report.mediaUrl && (
+                        <img
+                          src={report.mediaUrl}
+                          alt="report media"
+                          className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                        />
+                      )}
                     </div>
                     <button
                       type="button"
                       className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                      onClick={() => {
-                        deleteReport(report.id);
-                        toast.success("Report removed from profile");
-                      }}
+                      onClick={() => handleDeleteReport(report.id)}
                       data-ocid={`profile.delete_button.${idx + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -301,18 +360,20 @@ export default function ProfileTab() {
           </TabsContent>
 
           <TabsContent value="posts" className="mt-3 space-y-2">
-            {myPosts.length === 0 ? (
+            {mergedPosts.length === 0 ? (
               <div className="text-center py-8" data-ocid="profile.empty_state">
                 <div className="text-3xl mb-2">💬</div>
-                <p className="text-sm text-muted-foreground">No posts yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  You haven't made any posts yet.
+                </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Post in the TalkUp community.
+                  Post in the TalkUp community or Nagrik tab.
                 </p>
               </div>
             ) : (
-              myPosts.map((post, idx) => (
+              mergedPosts.map((post, idx) => (
                 <motion.div
-                  key={post.id.toString()}
+                  key={post.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.04 }}
@@ -323,7 +384,7 @@ export default function ProfileTab() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-semibold text-foreground">
-                          {post.displayName}
+                          {post.community}
                         </span>
                         <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                           {post.city}
@@ -333,34 +394,29 @@ export default function ProfileTab() {
                         </span>
                       </div>
                       <p className="text-sm text-foreground leading-snug">
-                        {post.content}
-                        {(post as any).localMediaIsVideo &&
-                          (post as any).localMediaUrl && (
-                            // biome-ignore lint/a11y/useMediaCaption: user-uploaded community post video
-                            <video
-                              src={(post as any).localMediaUrl}
-                              controls
-                              playsInline
-                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
-                            />
-                          )}
-                        {!(post as any).localMediaIsVideo &&
-                          (post as any).localMediaUrl && (
-                            <img
-                              src={(post as any).localMediaUrl}
-                              alt="post media"
-                              className="w-full rounded-lg mt-2 max-h-48 object-cover"
-                            />
-                          )}
+                        {post.text}
                       </p>
+                      {post.mediaType === "video" && post.mediaUrl && (
+                        // biome-ignore lint/a11y/useMediaCaption: user-uploaded community post video
+                        <video
+                          src={post.mediaUrl}
+                          controls
+                          playsInline
+                          className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                        />
+                      )}
+                      {post.mediaType === "photo" && post.mediaUrl && (
+                        <img
+                          src={post.mediaUrl}
+                          alt="post media"
+                          className="w-full rounded-lg mt-2 max-h-48 object-cover"
+                        />
+                      )}
                     </div>
                     <button
                       type="button"
                       className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                      onClick={() => {
-                        deletePost(post.id);
-                        toast.success("Post removed from profile");
-                      }}
+                      onClick={() => handleDeletePost(post.id)}
                       data-ocid={`profile.delete_button.${idx + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

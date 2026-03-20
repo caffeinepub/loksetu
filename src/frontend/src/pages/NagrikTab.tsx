@@ -13,6 +13,10 @@ import {
   useUpvoteIssue,
 } from "../hooks/useQueries";
 import type { Issue } from "../hooks/useQueries";
+import {
+  addReport as activityAddReport,
+  getReports,
+} from "../store/appActivity";
 import { useAppStore } from "../store/appStore";
 
 // Sample issues with realistic GPS near major Indian cities
@@ -88,7 +92,7 @@ function haversineKm(
 
 // Parse "28.6129° N, 77.2295° E" → {lat, lng}
 function parseGps(gpsStr: string): { lat: number; lng: number } | null {
-  const match = gpsStr.match(/([\.\d]+)°\s*([NS]),\s*([\d.]+)°\s*([EW])/i);
+  const match = gpsStr.match(/([.\d]+)°\s*([NS]),\s*([\d.]+)°\s*([EW])/i);
   if (!match) return null;
   const lat =
     Number.parseFloat(match[1]) * (match[2].toUpperCase() === "S" ? -1 : 1);
@@ -138,7 +142,29 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   const backendIssues: Issue[] =
     issues && issues.length > 0 ? issues : SAMPLE_ISSUES;
 
-  const rawIssues: Issue[] = [...localIssues, ...backendIssues];
+  // Merge activityIssues from localStorage so they survive tab switches
+  const activityIssues: Issue[] = getReports().map(
+    (r) =>
+      ({
+        id: BigInt(r.id.replace(/\D/g, "").slice(0, 15) || "0"),
+        title: r.title,
+        description: r.description || "",
+        gpsLocation: r.city || selectedCity,
+        category: r.category as any,
+        upvotes: BigInt(0),
+        timestamp: BigInt(r.timestamp * 1_000_000),
+        isVigilance: false,
+        reporter: { isAnonymous: () => false, toText: () => "me" } as any,
+        localMediaUrl: r.mediaUrl,
+        localMediaIsVideo: r.mediaType === "video",
+      }) as any,
+  );
+
+  const rawIssues: Issue[] = [
+    ...activityIssues,
+    ...localIssues,
+    ...backendIssues,
+  ];
 
   const displayIssues: Issue[] = (() => {
     if (userLocation) {
@@ -155,16 +181,27 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
         );
       });
     }
-    return rawIssues.filter((issue) =>
-      issue.gpsLocation.toLowerCase().includes(selectedCity.toLowerCase()),
-    );
+    return rawIssues.filter((issue) => {
+      const loc = issue.gpsLocation.toLowerCase();
+      const city = selectedCity.toLowerCase();
+      if (loc.includes("°")) {
+        return loc.includes(city);
+      }
+      return loc.includes(city) || city.includes(loc);
+    });
   })();
 
   const feedLocationLabel = userLocation ? "Near Me (20km)" : selectedCity;
 
   async function handleSubmit(
-    data: Parameters<typeof createIssue.mutateAsync>[0],
+    data: Parameters<typeof createIssue.mutateAsync>[0] & {
+      mediaUrl?: string;
+      mediaIsVideo?: boolean;
+      identityMode: "anonymous" | "real";
+    },
   ) {
+    const isAnonymousPost = data.identityMode === "anonymous";
+
     const optimisticIssue: Issue = {
       id: BigInt(Date.now()),
       title: data.title,
@@ -174,20 +211,45 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
       upvotes: BigInt(0),
       timestamp: BigInt(Date.now() * 1_000_000),
       isVigilance: data.isVigilance,
-      reporter: { isAnonymous: () => false, toText: () => "me" } as any,
+      reporter: isAnonymousPost
+        ? ({ isAnonymous: () => true, toText: () => "anonymous" } as any)
+        : ({ isAnonymous: () => false, toText: () => "me" } as any),
     };
 
-    if (!data.isVigilance) {
-      setLocalIssues((prev) => [optimisticIssue, ...prev]);
-      addReport(optimisticIssue);
+    // Always save media, add to feed and profile — for ALL reports including vigilance
+    if (data.mediaUrl) {
+      (optimisticIssue as any).localMediaUrl = data.mediaUrl;
+      (optimisticIssue as any).localMediaIsVideo = data.mediaIsVideo ?? false;
     }
+
+    // Add to feed immediately (reactive update)
+    setLocalIssues((prev) => [optimisticIssue, ...prev]);
+
+    // Persist to appStore (My Reports)
+    addReport(optimisticIssue);
+
+    // Save to appActivity store for ProfileTab display
+    activityAddReport({
+      id: optimisticIssue.id.toString(),
+      title: data.title,
+      category: String(data.category),
+      city: selectedCity,
+      description: data.description,
+      mediaUrl: data.mediaUrl,
+      mediaType: data.mediaIsVideo
+        ? "video"
+        : data.mediaUrl
+          ? "photo"
+          : undefined,
+      timestamp: Date.now(),
+    });
 
     setReportOpen(false);
     setVigilanceOpen(false);
     setVigilanceActive(false);
     toast.success(
       data.isVigilance
-        ? "Vigilance report submitted anonymously ✅"
+        ? "Vigilance report submitted! Visible in feed as Anonymous Citizen ✅"
         : "Issue reported successfully! ✅",
     );
 
@@ -302,7 +364,8 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
             <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2.5">
               <Shield className="w-4 h-4 text-destructive flex-shrink-0" />
               <span className="text-xs text-destructive font-semibold">
-                ⚠️ Extreme Anonymity is Active — Report bypasses public feed
+                ⚠️ Vigilance Mode Active — Report appears in feed as Anonymous
+                Citizen
               </span>
             </div>
           </motion.div>

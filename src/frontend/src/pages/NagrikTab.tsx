@@ -18,58 +18,91 @@ import {
   getReports,
 } from "../store/appActivity";
 import { useAppStore } from "../store/appStore";
+import {
+  type SeedReport,
+  getSeedReports,
+  saveSeedReports,
+} from "../utils/seedData";
 
-// Sample issues with realistic GPS near major Indian cities
-const SAMPLE_ISSUES: Issue[] = [
-  {
-    id: BigInt(1),
-    title: "Pothole on MG Road near bus stand",
-    description:
-      "Large pothole has formed after heavy rains. Two-wheelers are at risk of accidents.",
-    gpsLocation: "28.6129° N, 77.2295° E", // Delhi
-    category: IssueCategory.infrastructure,
-    upvotes: BigInt(24),
-    timestamp: BigInt((Date.now() - 7_200_000) * 1_000_000),
-    isVigilance: false,
-    reporter: { isAnonymous: () => false, toText: () => "aaaa-bbbbb" } as any,
-  },
-  {
-    id: BigInt(2),
-    title: "Garbage pile-up at Sector 12 corner",
-    description:
-      "Sanitation truck hasn't come for 5 days. Foul smell and health hazard.",
-    gpsLocation: "28.6200° N, 77.2100° E", // Delhi
-    category: IssueCategory.sanitation,
-    upvotes: BigInt(18),
-    timestamp: BigInt((Date.now() - 18_000_000) * 1_000_000),
-    isVigilance: false,
-    reporter: { isAnonymous: () => false, toText: () => "cccc-ddddd" } as any,
-  },
-  {
-    id: BigInt(3),
-    title: "Streetlight broken near Ramlila Ground",
-    description:
-      "Multiple streetlights non-functional since last week, causing safety concerns at night.",
-    gpsLocation: "28.6350° N, 77.2450° E", // Delhi
-    category: IssueCategory.publicSafety,
-    upvotes: BigInt(9),
-    timestamp: BigInt((Date.now() - 86_400_000) * 1_000_000),
-    isVigilance: false,
-    reporter: { isAnonymous: () => false, toText: () => "eeee-fffff" } as any,
-  },
-  {
-    id: BigInt(4),
-    title: "Water leakage on Civil Lines Road",
-    description:
-      "Municipal water pipe burst, flooding the road and wasting water.",
-    gpsLocation: "28.6440° N, 77.2210° E", // Delhi
-    category: IssueCategory.infrastructure,
-    upvotes: BigInt(31),
-    timestamp: BigInt((Date.now() - 3_600_000) * 1_000_000),
-    isVigilance: false,
-    reporter: { isAnonymous: () => false, toText: () => "gggg-hhhhh" } as any,
-  },
-];
+// Rough GPS coords for major Indian cities
+const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
+  Mumbai: { lat: 19.076, lng: 72.8777 },
+  Delhi: { lat: 28.6139, lng: 77.209 },
+  Bengaluru: { lat: 12.9716, lng: 77.5946 },
+  Hyderabad: { lat: 17.385, lng: 78.4867 },
+  Chennai: { lat: 13.0827, lng: 80.2707 },
+  Kolkata: { lat: 22.5726, lng: 88.3639 },
+  Pune: { lat: 18.5204, lng: 73.8567 },
+  Ahmedabad: { lat: 23.0225, lng: 72.5714 },
+  Jaipur: { lat: 26.9124, lng: 75.7873 },
+  Lucknow: { lat: 26.8467, lng: 80.9462 },
+  Chandigarh: { lat: 30.7333, lng: 76.7794 },
+  Bhopal: { lat: 23.2599, lng: 77.4126 },
+  Patna: { lat: 25.5941, lng: 85.1376 },
+  Kochi: { lat: 9.9312, lng: 76.2673 },
+  Nagpur: { lat: 21.1458, lng: 79.0882 },
+};
+
+function getCityCoords(cityName: string): { lat: number; lng: number } {
+  return CITY_COORDS[cityName] ?? { lat: 20.5937, lng: 78.9629 }; // India center fallback
+}
+
+function makeSampleIssues(selectedCity: string): Issue[] {
+  const coords = getCityCoords(selectedCity);
+  const offset = (n: number) => (coords.lat + n * 0.02).toFixed(4);
+  const offsetLng = (n: number) => (coords.lng + n * 0.02).toFixed(4);
+
+  return [
+    {
+      id: BigInt(1),
+      title: "Pothole near main market",
+      description:
+        "Large pothole at the main market crossing. Two-wheelers at serious risk after heavy rains.",
+      gpsLocation: `${offset(0)}° N, ${offsetLng(0)}° E`,
+      category: IssueCategory.infrastructure,
+      upvotes: BigInt(14),
+      timestamp: BigInt((Date.now() - 7_200_000) * 1_000_000),
+      isVigilance: false,
+      reporter: { isAnonymous: () => false, toText: () => "aaaa-bbbbb" } as any,
+    },
+    {
+      id: BigInt(2),
+      title: "Garbage pile-up at residential corner",
+      description:
+        "Municipal garbage truck hasn't come for 5 days. Foul smell and health hazard for residents.",
+      gpsLocation: `${offset(1)}° N, ${offsetLng(1)}° E`,
+      category: IssueCategory.sanitation,
+      upvotes: BigInt(6),
+      timestamp: BigInt((Date.now() - 18_000_000) * 1_000_000),
+      isVigilance: false,
+      reporter: { isAnonymous: () => false, toText: () => "cccc-ddddd" } as any,
+    },
+    {
+      id: BigInt(3),
+      title: "Streetlight broken near park",
+      description:
+        "Multiple streetlights non-functional near the city park. Safety concern for night walkers.",
+      gpsLocation: `${offset(-1)}° N, ${offsetLng(-1)}° E`,
+      category: IssueCategory.publicSafety,
+      upvotes: BigInt(9),
+      timestamp: BigInt((Date.now() - 86_400_000) * 1_000_000),
+      isVigilance: false,
+      reporter: { isAnonymous: () => false, toText: () => "eeee-fffff" } as any,
+    },
+    {
+      id: BigInt(4),
+      title: "Water pipe leakage on main road",
+      description:
+        "Municipal water pipe burst near the main road, flooding and causing major traffic snarls.",
+      gpsLocation: `${offset(2)}° N, ${offsetLng(2)}° E`,
+      category: IssueCategory.infrastructure,
+      upvotes: BigInt(3),
+      timestamp: BigInt((Date.now() - 3_600_000) * 1_000_000),
+      isVigilance: false,
+      reporter: { isAnonymous: () => false, toText: () => "gggg-hhhhh" } as any,
+    },
+  ];
+}
 
 // Haversine formula — returns distance in km
 function haversineKm(
@@ -115,6 +148,8 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   } | null>(null);
   const [_locationLabel, setLocationLabel] = useState<string>("");
   const [localIssues, setLocalIssues] = useState<Issue[]>([]);
+  const [feedScope, setFeedScope] = useState<"all" | "city">("all");
+  const [sortMode, setSortMode] = useState<"latest" | "upvoted">("latest");
 
   const { addReport, deleteReport, editReport, myReports } = useAppStore();
 
@@ -139,8 +174,41 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   const createIssue = useCreateIssue();
   const upvoteIssue = useUpvoteIssue();
 
+  const SAMPLE_ISSUES = makeSampleIssues(selectedCity);
   const backendIssues: Issue[] =
     issues && issues.length > 0 ? issues : SAMPLE_ISSUES;
+
+  // Load seed reports from localStorage (set by seedIfEmpty() on app load)
+  const seedReports: SeedReport[] = getSeedReports();
+  const seedIssues: Issue[] = seedReports.map(
+    (r) =>
+      ({
+        id: BigInt(
+          r.id.replace(/\D/g, "").slice(0, 15) ||
+            r.timestamp.toString().slice(0, 15),
+        ),
+        title: r.title,
+        description: r.description,
+        gpsLocation: r.gpsLocation,
+        category: r.category as any,
+        upvotes: BigInt(r.upvotes),
+        timestamp: BigInt(r.timestamp * 1_000_000),
+        isVigilance: false,
+        reporter:
+          r.identityMode === "anonymous"
+            ? ({ isAnonymous: () => true, toText: () => "anonymous" } as any)
+            : ({
+                isAnonymous: () => false,
+                toText: () => r.reporterName,
+              } as any),
+        localMediaUrl: r.mediaUrl,
+        localMediaIsVideo: r.mediaIsVideo,
+        reporterName: r.reporterName,
+        reporterInitials: r.reporterInitials,
+        verified: r.verified,
+        city: r.city,
+      }) as any,
+  );
 
   // Merge activityIssues from localStorage so they survive tab switches
   const activityIssues: Issue[] = getReports().map(
@@ -163,10 +231,14 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   const rawIssues: Issue[] = [
     ...activityIssues,
     ...localIssues,
+    ...seedIssues,
     ...backendIssues,
   ];
 
-  const displayIssues: Issue[] = (() => {
+  // Filter: All India vs My City
+  const filteredIssues: Issue[] = (() => {
+    if (feedScope === "all") return rawIssues;
+    // My City filter
     if (userLocation) {
       return rawIssues.filter((issue) => {
         const coords = parseGps(issue.gpsLocation);
@@ -184,14 +256,21 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
     return rawIssues.filter((issue) => {
       const loc = issue.gpsLocation.toLowerCase();
       const city = selectedCity.toLowerCase();
-      if (loc.includes("°")) {
-        return loc.includes(city);
-      }
+      if (loc.includes("°")) return loc.includes(city);
       return loc.includes(city) || city.includes(loc);
     });
   })();
 
-  const feedLocationLabel = userLocation ? "Near Me (20km)" : selectedCity;
+  // Sort
+  const displayIssues: Issue[] = [...filteredIssues].sort((a, b) => {
+    if (sortMode === "upvoted") return Number(b.upvotes) - Number(a.upvotes);
+    return Number(b.timestamp) - Number(a.timestamp);
+  });
+
+  const feedLocationLabel =
+    feedScope === "all"
+      ? `India · ${displayIssues.length} issues`
+      : `${selectedCity} · ${displayIssues.length} issues`;
 
   async function handleSubmit(
     data: Parameters<typeof createIssue.mutateAsync>[0] & {
@@ -216,6 +295,9 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
         : ({ isAnonymous: () => false, toText: () => "me" } as any),
     };
 
+    // Mark as AI-verified after the scanning animation completes
+    (optimisticIssue as any).isAiVerified = true;
+
     // Always save media, add to feed and profile — for ALL reports including vigilance
     if (data.mediaUrl) {
       (optimisticIssue as any).localMediaUrl = data.mediaUrl;
@@ -224,6 +306,28 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
 
     // Add to feed immediately (reactive update)
     setLocalIssues((prev) => [optimisticIssue, ...prev]);
+
+    // Persist new report to loksetu_nagrik_feed (alongside seed data)
+    const newSeedReport: SeedReport = {
+      id: optimisticIssue.id.toString(),
+      title: data.title,
+      description: data.description ?? "",
+      category: String(data.category),
+      city: selectedCity,
+      gpsLocation: data.gpsLocation,
+      mediaUrl: data.mediaUrl ?? "",
+      mediaIsVideo: data.mediaIsVideo ?? false,
+      upvotes: 0,
+      downvotes: 0,
+      reporterName:
+        data.identityMode === "anonymous" ? "Anonymous Citizen" : "You",
+      reporterInitials: data.identityMode === "anonymous" ? "AC" : "YO",
+      identityMode: data.identityMode,
+      timestamp: Date.now(),
+      verified: false,
+      comments: [],
+    };
+    saveSeedReports([newSeedReport, ...getSeedReports()]);
 
     // Persist to appStore (My Reports)
     addReport(optimisticIssue);
@@ -261,12 +365,26 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
   }
 
   async function handleUpvote(id: bigint) {
+    setLocalIssues((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, upvotes: i.upvotes + BigInt(1) } : i,
+      ),
+    );
     try {
       await upvoteIssue.mutateAsync(id);
-      toast.success("Upvoted!");
     } catch {
-      toast.error("Could not upvote");
+      // silently ignore
     }
+  }
+
+  function handleDownvote(id: bigint) {
+    setLocalIssues((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? { ...i, downvotes: ((i as any).downvotes ?? BigInt(0)) + BigInt(1) }
+          : i,
+      ),
+    );
   }
 
   function handleDeleteIssue(id: bigint) {
@@ -327,6 +445,45 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
         )}
       </div>
 
+      {/* All India / My City Toggle */}
+      <div className="px-4 mb-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFeedScope("all")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+            feedScope === "all"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+          }`}
+          data-ocid="nagrik.toggle"
+        >
+          🌍 All India
+        </button>
+        <button
+          type="button"
+          onClick={() => setFeedScope("city")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+            feedScope === "city"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+          }`}
+          data-ocid="nagrik.toggle"
+        >
+          📍 My City
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() =>
+            setSortMode((prev) => (prev === "latest" ? "upvoted" : "latest"))
+          }
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-muted border border-border text-muted-foreground hover:bg-muted/80 transition-colors"
+          data-ocid="nagrik.toggle"
+        >
+          {sortMode === "latest" ? "🕐 Latest" : "🔥 Top Voted"}
+        </button>
+      </div>
+
       {/* Vigilance Mode Button */}
       <div className="px-4 mb-3">
         <button
@@ -372,11 +529,11 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
         )}
       </AnimatePresence>
 
-      {/* Community Feed */}
+      {/* Community Feed header */}
       <div className="px-4 mb-2 flex items-center justify-between">
         <h3 className="text-base font-bold text-foreground">Community Feed</h3>
         <span className="text-xs text-muted-foreground">
-          {feedLocationLabel} · {displayIssues.length} issues
+          {feedLocationLabel}
         </span>
       </div>
 
@@ -399,6 +556,7 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
                 issue={issue}
                 index={index}
                 onUpvote={handleUpvote}
+                onDownvote={handleDownvote}
                 isUpvoting={upvoteIssue.isPending}
                 isOwner={myReportIds.has(issue.id.toString())}
                 onDelete={handleDeleteIssue}
@@ -410,7 +568,8 @@ export default function NagrikTab({ selectedCity }: NagrikTabProps) {
           <div className="text-center py-12" data-ocid="nagrik.empty_state">
             <div className="text-4xl mb-3">🏙️</div>
             <p className="text-muted-foreground text-sm">
-              No issues reported in {selectedCity} yet.
+              No issues reported
+              {feedScope === "city" ? ` in ${selectedCity}` : ""} yet.
             </p>
             <p className="text-muted-foreground text-xs">
               Be the first to report one!

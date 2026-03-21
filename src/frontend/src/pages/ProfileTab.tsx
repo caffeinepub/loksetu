@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award,
+  Camera,
   Edit2,
   FileText,
   Loader2,
@@ -16,7 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { UserRole, useCallerRole, useUserStats } from "../hooks/useQueries";
@@ -45,19 +46,44 @@ function timeAgo(timestamp: bigint | number): string {
   return "Just now";
 }
 
-export default function ProfileTab() {
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+interface ProfileTabProps {
+  userName: string;
+  userAvatar: string;
+  onNameChange: (name: string) => void;
+  onAvatarChange: (dataUrl: string) => void;
+}
+
+export default function ProfileTab({
+  userName,
+  userAvatar,
+  onNameChange,
+  onAvatarChange,
+}: ProfileTabProps) {
   const { data: role, isLoading: roleLoading } = useCallerRole();
   const { data: stats, isLoading: statsLoading } = useUserStats();
   const { login, clear, loginStatus, identity } = useInternetIdentity();
   const [editingName, setEditingName] = useState(false);
-  const [displayName, setDisplayName] = useState("Rohan Sharma");
-  const [nameInput, setNameInput] = useState("Rohan Sharma");
+  const [nameInput, setNameInput] = useState(userName);
   const [guestMode, setGuestMode] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep nameInput in sync if userName changes externally
+  useEffect(() => {
+    setNameInput(userName);
+  }, [userName]);
 
   const { deleteReport: storeDeleteReport, deletePost: storeDeletePost } =
     useAppStore();
 
-  // Activity store (persists media URLs and is written by all post/report flows)
   const [activityReports, setActivityReports] = useState<MyReport[]>(() =>
     getReports(),
   );
@@ -65,7 +91,6 @@ export default function ProfileTab() {
     getPosts(),
   );
 
-  // Reload activity data when the tab becomes visible
   useEffect(() => {
     function reload() {
       setActivityReports(getReports());
@@ -73,7 +98,6 @@ export default function ProfileTab() {
     }
     window.addEventListener("focus", reload);
     window.addEventListener("loksetu:activity", reload);
-    // Also reload on visibility change (mobile)
     document.addEventListener("visibilitychange", reload);
     return () => {
       window.removeEventListener("focus", reload);
@@ -82,9 +106,35 @@ export default function ProfileTab() {
     };
   }, []);
 
-  // Merge: prefer activityReports (has mediaUrl) and fall back to storeReports
   const mergedReports = activityReports.length > 0 ? activityReports : [];
   const mergedPosts = activityPosts.length > 0 ? activityPosts : [];
+
+  function handleSaveName() {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+    onNameChange(trimmed);
+    setEditingName(false);
+    toast.success("Name updated!");
+  }
+
+  function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        onAvatarChange(dataUrl);
+        toast.success("Profile photo updated!");
+      }
+    };
+    reader.readAsDataURL(file);
+    // Reset so same file can be chosen again
+    e.target.value = "";
+  }
 
   function handleDeleteReport(id: string) {
     activityDeleteReport(id);
@@ -108,7 +158,10 @@ export default function ProfileTab() {
     guestMode ||
     role === UserRole.guest ||
     (!identity && !roleLoading && !guestMode);
-  const reportsCount = Number(stats?.reportsCount ?? 12);
+  const reportsCount =
+    mergedReports.length > 0
+      ? mergedReports.length
+      : Number(stats?.reportsCount ?? 0);
   const progressPct = Math.min((reportsCount / MAX_REPORTS) * 100, 100);
   const certificateUnlocked =
     stats?.unlockedCertificate ?? reportsCount >= MAX_REPORTS;
@@ -131,7 +184,6 @@ export default function ProfileTab() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-xs"
         >
-          {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-24 h-24 rounded-full gradient-saffron flex items-center justify-center mx-auto mb-4 shadow-lg">
               <span className="text-4xl">🏛️</span>
@@ -145,7 +197,6 @@ export default function ProfileTab() {
           </div>
 
           <div className="space-y-3 w-full">
-            {/* Internet Identity — Primary */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -177,7 +228,6 @@ export default function ProfileTab() {
               <div className="flex-1 h-px bg-border" />
             </div>
 
-            {/* Guest Login — Secondary */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -209,12 +259,42 @@ export default function ProfileTab() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto pb-6">
+      {/* Hidden file input for avatar upload */}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleAvatarFileChange}
+        aria-label="Upload profile photo"
+      />
+
       {/* User Avatar + Name */}
       <div className="gradient-saffron mx-4 mt-4 rounded-2xl p-4 text-white mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-white/30 flex items-center justify-center text-2xl font-bold">
-            {displayName.charAt(0)}
-          </div>
+          {/* Avatar — tap to change photo */}
+          <button
+            type="button"
+            className="relative flex-shrink-0 group"
+            onClick={() => avatarInputRef.current?.click()}
+            title="Change profile photo"
+          >
+            <div className="w-14 h-14 rounded-full bg-white/30 flex items-center justify-center text-2xl font-bold overflow-hidden">
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{getInitials(userName) || "N"}</span>
+              )}
+            </div>
+            <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera className="w-5 h-5 text-white" />
+            </div>
+          </button>
+
           <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex gap-2">
@@ -222,28 +302,40 @@ export default function ProfileTab() {
                   className="h-8 text-sm text-foreground"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+                  autoFocus
                   data-ocid="profile.input"
                 />
                 <Button
                   size="sm"
                   variant="secondary"
                   className="h-8 px-3"
-                  onClick={() => {
-                    setDisplayName(nameInput);
-                    setEditingName(false);
-                    toast.success("Name updated!");
-                  }}
+                  onClick={handleSaveName}
                   data-ocid="profile.save_button"
                 >
                   Save
                 </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-white/80 hover:text-white hover:bg-white/20"
+                  onClick={() => {
+                    setEditingName(false);
+                    setNameInput(userName);
+                  }}
+                >
+                  ✕
+                </Button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base truncate">{displayName}</h3>
+                <h3 className="font-bold text-base truncate">{userName}</h3>
                 <button
                   type="button"
-                  onClick={() => setEditingName(true)}
+                  onClick={() => {
+                    setNameInput(userName);
+                    setEditingName(true);
+                  }}
                   data-ocid="profile.edit_button"
                 >
                   <Edit2 className="w-3.5 h-3.5 opacity-80" />
@@ -496,7 +588,7 @@ export default function ProfileTab() {
                   Satark Nagrik Pramanpatra
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {displayName} | {new Date().toLocaleDateString("en-IN")}
+                  {userName} | {new Date().toLocaleDateString("en-IN")}
                 </p>
               </div>
             </motion.div>
@@ -529,7 +621,10 @@ export default function ProfileTab() {
         <button
           type="button"
           className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left"
-          onClick={() => setEditingName(true)}
+          onClick={() => {
+            setNameInput(userName);
+            setEditingName(true);
+          }}
           data-ocid="profile.edit_button"
         >
           <User className="w-4 h-4 text-muted-foreground" />
@@ -538,7 +633,17 @@ export default function ProfileTab() {
         </button>
         <button
           type="button"
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-destructive/5 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left border-t border-border"
+          onClick={() => avatarInputRef.current?.click()}
+          data-ocid="profile.edit_button"
+        >
+          <Camera className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm text-foreground">Change Profile Photo</span>
+          <Edit2 className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-destructive/5 transition-colors text-left border-t border-border"
           onClick={() => {
             clear();
             setGuestMode(false);

@@ -201,11 +201,11 @@ const STATE_HEADLINES: Record<string, string[]> = {
 };
 
 const DEFAULT_HEADLINES = [
-  "Delhi Air Quality improves to 'Good' category after weekend rains 🌧️",
-  "New metro line extension approved: Janakpuri to RK Puram corridor",
-  "Municipal Corporation conducts free health camps in 50 wards this week",
-  "Power department announces 2-hour maintenance cuts for North Delhi zones",
-  "Shramdaan drive this Sunday: 10,000 volunteers to clean Yamuna banks",
+  "New metro line extensions approved across major Indian cities",
+  "Municipal corporations launch free health camps this month",
+  "Smart City mission: 500+ new smart signals installed nationally",
+  "Pre-monsoon drain cleaning drives underway in all metro cities",
+  "National road repair fund of ₹2000 Cr announced for state highways",
 ];
 
 type TileId = "transit" | "emergency" | "shramdaan";

@@ -93,6 +93,39 @@ const SAMPLE_COMMUNITY_POSTS: import("../backend.d").CommunityPost[] = [
   },
 ];
 
+const MOCK_COMMUNITY_POSTS: import("../backend.d").CommunityPost[] = [
+  {
+    id: BigInt(101),
+    displayName: "Priya Patel",
+    city: "Mumbai",
+    content:
+      "The road near Kurla bus depot is completely broken after the monsoon. MCGM needs to fix this ASAP — two accidents this week already! 🚧 #MumbaiRoads #CivicIssue",
+    likeCount: BigInt(22),
+    timestamp: BigInt((Date.now() - 2_700_000) * 1_000_000),
+    author: null as any,
+  },
+  {
+    id: BigInt(102),
+    displayName: "Arun Desai",
+    city: "Mumbai",
+    content:
+      "Overflowing drain on LBS Marg near Ghatkopar is creating a health hazard. Reported to BMC 3 times with no response. Citizens need to upvote this! 🦟 #BMC #Sanitation",
+    likeCount: BigInt(14),
+    timestamp: BigInt((Date.now() - 5_400_000) * 1_000_000),
+    author: null as any,
+  },
+  {
+    id: BigInt(103),
+    displayName: "Meena Kulkarni",
+    city: "Mumbai",
+    content:
+      "Streetlights on Gokhale Road in Dadar have been off for 2 weeks. Filed complaint on portal — no response. Women feel unsafe walking at night. Please upvote! 🌃 #SafeMumbai",
+    likeCount: BigInt(7),
+    timestamp: BigInt((Date.now() - 9_000_000) * 1_000_000),
+    author: null as any,
+  },
+];
+
 const SAMPLE_STATUSES: import("../backend.d").Status[] = [
   {
     displayName: "Ankit V.",
@@ -915,10 +948,13 @@ function CommunitySubTab({ selectedCity }: { selectedCity: string }) {
   const createPost = useCreateCommunityPost();
 
   const allPosts = posts && posts.length > 0 ? posts : SAMPLE_COMMUNITY_POSTS;
+  // Merge mock Mumbai posts if total feed < 3 posts
+  const basePosts =
+    allPosts.length < 3 ? [...MOCK_COMMUNITY_POSTS, ...allPosts] : allPosts;
   const filteredPosts =
     cityFilter === "city"
-      ? allPosts.filter((p) => p.city === selectedCity)
-      : allPosts;
+      ? basePosts.filter((p) => p.city === selectedCity)
+      : basePosts;
   const localFiltered =
     cityFilter === "city"
       ? localPosts.filter((p) => p.city === selectedCity)

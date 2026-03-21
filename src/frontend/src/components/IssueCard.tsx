@@ -19,8 +19,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  CheckCircle,
   Clock,
   Edit2,
+  Hourglass,
   MapPin,
   MessageCircle,
   MoreVertical,
@@ -28,11 +30,13 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import type { Issue } from "../hooks/useQueries";
 import { IssueCategory } from "../hooks/useQueries";
+import { getCategoryFallbackImage } from "../utils/categoryImages";
 import CommentsSheet from "./CommentsSheet";
 import UserProfileSheet from "./UserProfileSheet";
 
@@ -90,36 +94,52 @@ function initials(name: string): string {
     .join("");
 }
 
-const DOWNVOTES_KEY = "loksetu_downvotes";
-
-function loadDownvotes(): Record<string, number> {
-  try {
-    return JSON.parse(localStorage.getItem(DOWNVOTES_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function saveDownvotes(data: Record<string, number>) {
-  try {
-    localStorage.setItem(DOWNVOTES_KEY, JSON.stringify(data));
-  } catch {}
-}
-
 interface IssueCardProps {
   issue: Issue;
   index: number;
   onUpvote: (id: bigint) => void;
+  onDownvote?: (id: bigint) => void;
   isUpvoting?: boolean;
   isOwner?: boolean;
   onDelete?: (id: bigint) => void;
   onEdit?: (id: bigint, newTitle: string, newDesc: string) => void;
 }
 
+function VerificationBadge({
+  upvotes,
+  downvotes,
+  isAiVerified,
+}: {
+  upvotes: number;
+  downvotes: number;
+  isAiVerified: boolean;
+}) {
+  if (isAiVerified || upvotes >= 10) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+        <CheckCircle className="w-3 h-3" /> Verified
+      </span>
+    );
+  }
+  if (downvotes > upvotes && downvotes >= 5) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+        <XCircle className="w-3 h-3" /> Not Verified
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+      <Hourglass className="w-3 h-3" /> Pending
+    </span>
+  );
+}
+
 export default function IssueCard({
   issue,
   index,
   onUpvote,
+  onDownvote,
   isOwner,
   onDelete,
   onEdit,
@@ -127,10 +147,9 @@ export default function IssueCard({
   const [liked, setLiked] = useState(false);
   const [localUpvotes, setLocalUpvotes] = useState(Number(issue.upvotes));
   const [disliked, setDisliked] = useState(false);
-  const [localDownvotes, setLocalDownvotes] = useState(() => {
-    const store = loadDownvotes();
-    return store[issue.id.toString()] ?? 0;
-  });
+  const [localDownvotes, setLocalDownvotes] = useState(
+    Number((issue as any).downvotes ?? BigInt(0)),
+  );
   const [profileOpen, setProfileOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount] = useState(Math.floor(Math.random() * 8) + 1);
@@ -164,6 +183,20 @@ export default function IssueCard({
   const cityMatch = issue.gpsLocation.match(/([A-Z][a-z]+)/);
   const city = cityMatch ? cityMatch[1] : "India";
 
+  const isAiVerified = Boolean((issue as any).isAiVerified);
+
+  // Determine display image:
+  // 1. Backend blob (highest priority)
+  // 2. User-uploaded local photo/video
+  // 3. Category-matched fallback image (never a random/wrong image)
+  const userUploadedUrl: string | undefined = (issue as any).localMediaUrl;
+  const userUploadedIsVideo: boolean = Boolean(
+    (issue as any).localMediaIsVideo,
+  );
+  const fallbackImageUrl = getCategoryFallbackImage(
+    String(issue.category).replace(/[{}]/g, ""),
+  );
+
   function handleUpvote() {
     setLiked((prev) => {
       const next = !prev;
@@ -176,13 +209,10 @@ export default function IssueCard({
   function handleDownvote() {
     setDisliked((prev) => {
       const next = !prev;
-      const newCount = localDownvotes + (next ? 1 : -1);
-      setLocalDownvotes(newCount);
-      const store = loadDownvotes();
-      store[issue.id.toString()] = newCount;
-      saveDownvotes(store);
+      setLocalDownvotes((c) => c + (next ? 1 : -1));
       return next;
     });
+    onDownvote?.(issue.id);
   }
 
   function handleSaveEdit() {
@@ -199,7 +229,8 @@ export default function IssueCard({
         data-ocid={`nagrik.item.${index + 1}`}
         className="bg-card rounded-xl shadow-card overflow-hidden border border-border"
       >
-        {issue.photoBlob && (
+        {/* Media section — priority: backend blob > user upload > category fallback */}
+        {issue.photoBlob ? (
           <div className="h-36 bg-muted overflow-hidden">
             <img
               src={issue.photoBlob.getDirectURL()}
@@ -208,25 +239,31 @@ export default function IssueCard({
               loading="lazy"
             />
           </div>
-        )}
-        {(issue as any).localMediaUrl && (
+        ) : userUploadedUrl && userUploadedIsVideo ? (
           <div className="h-36 bg-muted overflow-hidden">
-            {(issue as any).localMediaIsVideo ? (
-              // biome-ignore lint/a11y/useMediaCaption: local civic video
-              <video
-                src={(issue as any).localMediaUrl}
-                className="w-full h-full object-cover"
-                muted
-                playsInline
-              />
-            ) : (
-              <img
-                src={(issue as any).localMediaUrl}
-                alt={issue.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            )}
+            {/* biome-ignore lint/a11y/useMediaCaption: local civic video */}
+            <video
+              src={userUploadedUrl}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+            />
+          </div>
+        ) : (
+          // Show user-uploaded photo if present, otherwise show category-matched fallback
+          <div className="h-36 bg-muted overflow-hidden">
+            <img
+              src={userUploadedUrl || fallbackImageUrl}
+              alt={issue.title}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                // If image fails to load, use fallback
+                if ((e.target as HTMLImageElement).src !== fallbackImageUrl) {
+                  (e.target as HTMLImageElement).src = fallbackImageUrl;
+                }
+              }}
+            />
           </div>
         )}
 
@@ -271,7 +308,6 @@ export default function IssueCard({
               </div>
             </button>
 
-            {/* 3-dot owner menu */}
             {isOwner && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -304,7 +340,6 @@ export default function IssueCard({
             )}
           </div>
 
-          {/* Edit form */}
           {editMode ? (
             <div className="mb-3 space-y-2">
               <Input
@@ -344,12 +379,17 @@ export default function IssueCard({
             </div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded-full ${catConfig.bg} ${catConfig.color}`}
                 >
                   {catConfig.label}
                 </span>
+                <VerificationBadge
+                  upvotes={localUpvotes}
+                  downvotes={localDownvotes}
+                  isAiVerified={isAiVerified}
+                />
               </div>
               <h3 className="font-semibold text-sm text-card-foreground leading-snug mb-1">
                 {editTitle}
@@ -393,7 +433,6 @@ export default function IssueCard({
                 <span>{commentCount}</span>
               </button>
             </div>
-            {/* Vote counts */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <ThumbsUp
@@ -425,7 +464,6 @@ export default function IssueCard({
         </div>
       </motion.div>
 
-      {/* Delete confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -470,4 +508,6 @@ export default function IssueCard({
       />
     </>
   );
+
+  // Suppress unused variable warning for hasUserMedia
 }
